@@ -5,6 +5,8 @@ import torch
 
 import numpy as np
 
+from afl_bench.agents.common import get_parameters, set_parameters
+
 class SimpleClient(flwr.client.NumPyClient):
     def __init__(
         self, 
@@ -19,17 +21,17 @@ class SimpleClient(flwr.client.NumPyClient):
         self.device = device
 
     def get_parameters(self, config):
-        return _get_parameters(self.net)
+        return get_parameters(self.net)
 
     def fit(self, parameters, config):
         epochs = config.get("epochs", 1)
         
-        _set_parameters(self.net, parameters)
+        set_parameters(self.net, parameters)
         _train(self.net, self.trainloader, epochs=epochs, device=self.device)
-        return _get_parameters(self.net), len(self.trainloader), {}
+        return get_parameters(self.net), len(self.trainloader), {}
 
     def evaluate(self, parameters, config):
-        _set_parameters(self.net, parameters)
+        set_parameters(self.net, parameters)
         loss, accuracy = _test(self.net, self.valloader, device=self.device)
         return float(loss), len(self.valloader), {"accuracy": float(accuracy)}
 
@@ -74,11 +76,3 @@ def _test(net, testloader, device='cpu'):
     loss /= len(testloader.dataset)
     accuracy = correct / total
     return loss, accuracy
-
-def _get_parameters(net) -> List[np.ndarray]:
-    return [val.cpu().numpy() for _, val in net.state_dict().items()]
-
-def _set_parameters(net, parameters: List[np.ndarray]):
-    params_dict = zip(net.state_dict().keys(), parameters)
-    state_dict = OrderedDict({k: torch.Tensor(v) for k, v in params_dict})
-    net.load_state_dict(state_dict, strict=True)

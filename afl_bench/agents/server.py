@@ -1,22 +1,29 @@
 
 from abc import abstractmethod
-from threading import Thread
+import copy
+from threading import Lock, Thread
 from typing import List, Tuple
 
 from afl_bench.agents.buffer import Buffer
+from afl_bench.agents.common import get_parameters, set_parameters
 from afl_bench.agents.strategies import ModelParams, Strategy
 
 
 class ServerInterface:
     @abstractmethod
-    def get_current_model(self):
+    def get_current_model(self) -> Tuple[ModelParams, int]:
         """
         Get the current global model parameters.
         """
         pass
     
     @abstractmethod
-    def broadcast_updated_model(self, old_params, new_params, version_number):
+    def broadcast_updated_model(
+        self, 
+        old_params: ModelParams,
+        new_params: ModelParams,
+        version_number: int
+    ):
         """
         Upon completion of local training, the client calls this method to
         send the updated model to the server. Note that old_params is sent
@@ -39,14 +46,20 @@ class Server(ServerInterface):
         self.thread = None
         
         self.buffer = Buffer(wait_for_full=strategy.wait_for_full, n=strategy.buffer_size)
+        self.model_mutex = Lock()
 
-    def get_current_model(self):
-        return self.current_model, self.version_number
+    def get_current_model(self) -> Tuple[ModelParams, int]:
+        with self.model_mutex:
+            return get_parameters(self.current_model), self.version_number
 
-    def broadcast_updated_model(self, old_params, new_params, version_number):
-        # TODO: Implement buffer for multiple clients.
-        pass
-        
+    def broadcast_updated_model(
+        self, 
+        old_params: ModelParams, 
+        new_params: ModelParams, 
+        version_number: int
+    ):
+        self.buffer.add((old_params, new_params, version_number))
+    
     def run(self):
         def run_impl():
             while self.is_running:
@@ -55,7 +68,12 @@ class Server(ServerInterface):
                 aggregated_updates = self.buffer.get_items()
 
                 # Aggregate and update model.
-                self.strategy.aggregate(self.current_model.parameters(), aggregated_updates)
+                model_update = self.strategy.aggregate(self.current_model.parameters(), aggregated_updates)
+                
+                # Acquire model lock and update current global model.s
+                with self.model_mutex:
+                    set_parameters(self.current_model, model_update)
+                    self.version_number += 1
                      
         # Initialize thread once only
         if self.thread is None:
