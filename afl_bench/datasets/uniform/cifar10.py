@@ -1,5 +1,4 @@
-
-
+from functools import cache
 import os
 from typing import List, Tuple
 
@@ -10,6 +9,7 @@ from torchvision.datasets import CIFAR10
 
 from afl_bench.datasets import RAW_DATA_PATH
 
+@cache
 def load_datasets(
     num_clients: int, 
     batch_size = 32

@@ -159,5 +159,5 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
-# Ignore downloaded dataset files
-datasets/data
+# Ignore downloaded dataset files: this is just a temp directory to download to.
+afl_bench/datasets/data/
