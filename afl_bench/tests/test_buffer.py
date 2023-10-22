@@ -6,7 +6,7 @@ from afl_bench.agents.buffer import Buffer
 
 class TestBuffer(unittest.TestCase):
     def test_no_wait(self):
-        buffer = Buffer(wait_for_full=False, length=2)
+        buffer = Buffer(wait_for_full=False, n=2)
         buffer.add(1)
         buffer.add(2)
         buffer.add(3)
@@ -18,8 +18,8 @@ class TestBuffer(unittest.TestCase):
     
     @timeout_decorator.timeout(1)
     def test_with_wait(self):
-        # Testing ability to add to buf
-        buffer = Buffer(wait_for_full=True, length=1)
+        # Testing ability to add to buffer from another thread while waiting.
+        buffer = Buffer(wait_for_full=True, n=1)
         
         result = [None]
         def set_result(result):

@@ -1,12 +1,19 @@
 
+
 from threading import Lock, Condition
+from typing import List, Tuple
+
+from afl_bench.types import ClientUpdate
 
 class Buffer:
     def __init__(self, wait_for_full=True, n=None) -> None:
-        """_summary_
+        """
+        Initializes a thread safe buffer which receives updates in thread safe manner
+        and retrieves n-length windows of items.
 
         Args:
-            wait_for_full (bool, optional): whether we should wait for all n or just return current state. Defaults to True.
+            wait_for_full (bool, optional): whether we should wait for all n or 
+                just return current state. Defaults to True.
             n (int, optional): number of items to return. Defaults to None.
         """
         assert wait_for_full or n is not None, "Must specify length if not waiting for full buffer."
@@ -19,7 +26,7 @@ class Buffer:
         self.mutex = Lock()
         self.full_cv = Condition(self.mutex)
     
-    def add(self, item):
+    def add(self, item: ClientUpdate):
         """
         Add an item to the buffer, signalling if adding the item makes the
         buffer full.
@@ -32,7 +39,7 @@ class Buffer:
             if len(self.buffer) == self.n:
                 self.full_cv.notify_all()
         
-    def get_items(self):
+    def get_items(self) -> List[ClientUpdate]:
         """
         Get relevant buffer items given length of buffer requested.
 
@@ -52,5 +59,4 @@ class Buffer:
             self.buffer = self.buffer[slice_length:]
             
             return relevant_slice
-
       

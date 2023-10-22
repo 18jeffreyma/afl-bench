@@ -1,9 +1,10 @@
 
 from abc import abstractmethod
 from threading import Thread
+from typing import List, Tuple
 
 from afl_bench.agents.buffer import Buffer
-from afl_bench.agents.strategies import Strategy
+from afl_bench.agents.strategies import ModelParams, Strategy
 
 
 class ServerInterface:
@@ -50,12 +51,11 @@ class Server(ServerInterface):
         def run_impl():
             while self.is_running:
                 # Wait until aggregation buffer is full and retrieve updates.
+                # TODO: Add optional time delay?
                 aggregated_updates = self.buffer.get_items()
 
-                model_update = self.strategy.aggregate(aggregated_updates)
-
-                # Update global model.
-                # TODO: Implement model update.
+                # Aggregate and update model.
+                self.strategy.aggregate(self.current_model.parameters(), aggregated_updates)
                      
         # Initialize thread once only
         if self.thread is None:
