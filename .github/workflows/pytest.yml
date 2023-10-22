@@ -10,18 +10,17 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - name: Set up Python 3.10
-      uses: actions/setup-python@v3
-      with:
-        python-version: '3.10'
     - uses: mamba-org/setup-micromamba@v1
       with:
         environment-file: env.yml
         cache-environment: true
+        init-shell: bash
         condarc: |
           channels:
             - conda-forge
             - pytorch
+          use-only-tar-bz2: true
+          auto-update-conda: true
     # - name: Lint with flake8
     #   run: |
     #     conda install flake8
