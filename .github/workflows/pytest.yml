@@ -18,7 +18,10 @@ jobs:
       with:
         environment-file: env.yml
         cache-environment: true
-        channels: conda-forge,pytorch
+        condarc: |
+          channels:
+            - conda-forge
+            - pytorch
     # - name: Lint with flake8
     #   run: |
     #     conda install flake8
