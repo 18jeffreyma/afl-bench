@@ -1,0 +1,29 @@
+# FILEPATH: .github/workflows/pytest.yml
+
+name: pytest
+
+on: [push]
+
+jobs:
+    test:
+        runs-on: ubuntu-latest
+        strategy:
+            matrix:
+                python-version: [3.8]
+        steps:
+        - name: Checkout code
+            uses: actions/checkout@v2
+        - name: Set up Python ${{ matrix.python-version }}
+            uses: actions/setup-python@v2
+            with:
+                python-version: ${{ matrix.python-version }}
+        - name: Install conda
+            uses: conda-incubator/setup-miniconda@v2
+            with:
+                auto-update-conda: true
+        - name: Activate conda environment
+            run: conda activate env
+        - name: Install dependencies
+            run: conda env update -f env.yml
+        - name: Run pytest
+            run: pytest
