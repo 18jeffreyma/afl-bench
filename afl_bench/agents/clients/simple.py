@@ -1,10 +1,8 @@
 import torch
 
-from flwr.client import NumPyClient
-
 from afl_bench.agents.common import get_parameters, set_parameters
 
-class SimpleClient(NumPyClient):
+class Client:
     def __init__(self, net, trainloader, valloader):
         self.net = net
         self.trainloader = trainloader

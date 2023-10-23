@@ -5,7 +5,7 @@ import logging
 import torch
 
 from afl_bench.agents import Server, ClientThread, Strategy
-from afl_bench.agents.clients import SimpleClient
+from afl_bench.agents.clients import Client
 from afl_bench.agents.runtime_model import InstantRuntime
 from afl_bench.datasets.uniform.cifar10 import load_datasets
 from afl_bench.models import SimpleCNN
@@ -35,12 +35,12 @@ strategy = Strategy(
 server = Server(SimpleCNN(), strategy)
 
 # Assemble a list of all client threads.
-num_clients = 10
+num_clients = 4
 trainloaders, testloaders, _ = load_datasets(num_clients)
 
 client_threads = []
 for i in range(num_clients):
-    client = SimpleClient(SimpleCNN(), trainloaders[i], testloaders[i])
+    client = Client(SimpleCNN(), trainloaders[i], testloaders[i])
     client_thread = ClientThread(client, server, runtime_model=InstantRuntime())
     client_threads.append(client_thread)
     

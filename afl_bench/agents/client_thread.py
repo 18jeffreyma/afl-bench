@@ -1,19 +1,18 @@
 
-from threading import Thread
+import logging
 import time
-from flwr.client import NumPyClient
+from threading import Thread
 
+from afl_bench.agents.clients import Client
 from afl_bench.agents.runtime_model import RuntimeModel
 from afl_bench.agents.server import ServerInterface
-
-import logging
 
 logger = logging.getLogger(__name__)
 
 class ClientThread:
     def __init__(
         self,
-        client: NumPyClient,
+        client: Client,
         server: ServerInterface,
         runtime_model: RuntimeModel
     ) -> None:

@@ -8,7 +8,6 @@ setup(
     description='A benchmark for asynchronous federated learning',
     packages=['afl_bench'],
     install_requires=[
-        'flwr',
         'torch',
         'torchvision',
         'matplotlib',
