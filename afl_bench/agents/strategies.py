@@ -16,6 +16,6 @@ class Strategy(BaseModel):
     #   - List of parameters for initial old model of client.
     #   - List of parameters for updated new model of client after local data
     #   - Version number of global model used by client during training.
-    aggregate: Callable[[ModelParams, List[ClientUpdate]], None]
+    aggregate: Callable[[ModelParams, List[ClientUpdate]], ModelParams]
 
     

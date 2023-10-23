@@ -6,6 +6,9 @@ from flwr.client import NumPyClient
 from afl_bench.agents.runtime_model import RuntimeModel
 from afl_bench.agents.server import ServerInterface
 
+import logging
+
+logger = logging.getLogger(__name__)
 
 class ClientThread:
     def __init__(
@@ -23,14 +26,17 @@ class ClientThread:
     def run(self, train_config={}, eval_config={}):
         def run_impl():
             while self.is_running:
+                logger.info("Client thread running local training.")
+                
                 # Get latest global model and simulate client runtime.
-                init_global_params, version = self.server.get_latest_global_model()
+                init_global_params, version = self.server.get_current_model()
                 
                 # Simulate slow client runtime and fit model to local data.
                 time.sleep(self.runtime_model.sample_runtime())
                 new_parameters, _, _ = self.client.fit(init_global_params, train_config)
     
                 _, _, metrics = self.client.evaluate(new_parameters, eval_config)
+                logger.info(f"Client thread: {metrics}")
                 
                 # Broadcast updated model to server.
                 self.server.broadcast_updated_model(init_global_params, new_parameters, version)

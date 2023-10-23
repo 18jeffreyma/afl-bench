@@ -1,13 +1,14 @@
 
 from abc import abstractmethod
-import copy
 from threading import Lock, Thread
-from typing import List, Tuple
+from typing import Tuple
 
 from afl_bench.agents.buffer import Buffer
 from afl_bench.agents.common import get_parameters, set_parameters
 from afl_bench.agents.strategies import ModelParams, Strategy
 
+import logging
+logger = logging.getLogger(__name__)
 
 class ServerInterface:
     @abstractmethod
@@ -35,6 +36,7 @@ class ServerInterface:
             version_number: the version number of the old global model used.
         """
         pass
+
 
 class Server(ServerInterface):
     def __init__(self, initial_model, strategy: Strategy):
@@ -66,12 +68,15 @@ class Server(ServerInterface):
                 # Wait until aggregation buffer is full and retrieve updates.
                 # TODO: Add optional time delay?
                 aggregated_updates = self.buffer.get_items()
+                logger.info("Server thread running aggregation.")
 
                 # Aggregate and update model.
-                model_update = self.strategy.aggregate(self.current_model.parameters(), aggregated_updates)
+                model_update = self.strategy.aggregate(
+                    self.current_model.parameters(), aggregated_updates)
                 
-                # Acquire model lock and update current global model.s
+                # Acquire model lock and update current global model.
                 with self.model_mutex:
+                    logger.info("Server thread updating global model.")
                     set_parameters(self.current_model, model_update)
                     self.version_number += 1
                      
@@ -81,12 +86,11 @@ class Server(ServerInterface):
             self.thread = Thread(target=run_impl)
             self.thread.start()
         else:
-            raise RuntimeError("Client thread already running!")
+            raise RuntimeError("Server thread already running!")
         
     def stop(self):
         if self.thread is not None:
             self.is_running = False
             self.thread.join()
             self.thread = None
-        
     
