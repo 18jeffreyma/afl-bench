@@ -1,7 +1,7 @@
 
 
 from threading import Lock, Condition
-from typing import List, Tuple
+from typing import List
 
 from afl_bench.types import ClientUpdate
 

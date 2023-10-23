@@ -75,7 +75,7 @@ class Server(ServerInterface):
 
                 # Aggregate and update model.
                 model_update = self.strategy.aggregate(
-                    self.current_model.parameters(), aggregated_updates)
+                    self.model.parameters(), aggregated_updates)
                 
                 # Acquire model lock and update current global model.
                 with self.model_mutex:

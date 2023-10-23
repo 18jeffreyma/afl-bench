@@ -1,9 +1,8 @@
-from collections import OrderedDict
-from typing import List
 import torch
-import numpy as np
 
 from flwr.client import NumPyClient
+
+from afl_bench.agents.common import get_parameters, set_parameters
 
 class SimpleClient(NumPyClient):
     def __init__(self, net, trainloader, valloader):
@@ -12,15 +11,15 @@ class SimpleClient(NumPyClient):
         self.valloader = valloader
 
     def get_parameters(self, config):
-        return _get_parameters(self.net)
+        return get_parameters(self.net)
 
     def fit(self, parameters, config):
-        _set_parameters(self.net, parameters)
+        set_parameters(self.net, parameters)
         _train(self.net, self.trainloader, epochs=1)
-        return _get_parameters(self.net), len(self.trainloader), {}
+        return get_parameters(self.net), len(self.trainloader), {}
 
     def evaluate(self, parameters, config):
-        _set_parameters(self.net, parameters)
+        set_parameters(self.net, parameters)
         loss, accuracy = _test(self.net, self.valloader)
         return float(loss), len(self.valloader), {"accuracy": float(accuracy)}
 

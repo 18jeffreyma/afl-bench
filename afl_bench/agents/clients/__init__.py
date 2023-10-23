@@ -1,1 +1,1 @@
-from simple import SimpleClient
+from .simple import SimpleClient
