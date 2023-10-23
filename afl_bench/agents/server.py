@@ -40,19 +40,22 @@ class ServerInterface:
 
 class Server(ServerInterface):
     def __init__(self, initial_model, strategy: Strategy):
-        self.current_model = initial_model
+        self.model = initial_model
         self.version_number = 0
-        self.strategy = strategy
         
+        self.strategy = strategy
+
+        self.buffer = Buffer(
+            wait_for_full=strategy.wait_for_full,
+            n=strategy.buffer_size)
+
+        self.model_mutex = Lock()
         self.is_running = False
         self.thread = None
-        
-        self.buffer = Buffer(wait_for_full=strategy.wait_for_full, n=strategy.buffer_size)
-        self.model_mutex = Lock()
 
     def get_current_model(self) -> Tuple[ModelParams, int]:
         with self.model_mutex:
-            return get_parameters(self.current_model), self.version_number
+            return get_parameters(self.model), self.version_number
 
     def broadcast_updated_model(
         self, 
@@ -65,7 +68,7 @@ class Server(ServerInterface):
     def run(self):
         def run_impl():
             while self.is_running:
-                # Wait until aggregation buffer is full and retrieve updates.
+                # Waits until aggregation buffer is ready to dispense items when called.
                 # TODO: Add optional time delay?
                 aggregated_updates = self.buffer.get_items()
                 logger.info("Server thread running aggregation.")
@@ -77,7 +80,7 @@ class Server(ServerInterface):
                 # Acquire model lock and update current global model.
                 with self.model_mutex:
                     logger.info("Server thread updating global model.")
-                    set_parameters(self.current_model, model_update)
+                    set_parameters(self.model, model_update)
                     self.version_number += 1
                      
         # Initialize thread once only
