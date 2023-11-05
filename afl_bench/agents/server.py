@@ -47,7 +47,8 @@ class Server(ServerInterface):
 
         self.buffer = Buffer(
             wait_for_full=strategy.wait_for_full,
-            n=strategy.buffer_size)
+            n=strategy.buffer_size,
+            ms_to_wait=strategy.ms_to_wait)
 
         self.model_mutex = Lock()
         self.is_running = False

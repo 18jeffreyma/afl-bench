@@ -9,16 +9,16 @@ from torchvision.datasets import CIFAR10
 
 from afl_bench.datasets import RAW_DATA_PATH
 
+
 @cache
 def load_datasets(
-    num_clients: int, 
-    batch_size = 32
+    num_clients: int, batch_size=32
 ) -> Tuple[List[DataLoader], List[DataLoader], DataLoader]:
     # Download and transform CIFAR-10 (train and test)
     transform = transforms.Compose(
         [transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
     )
-    
+
     path = os.path.join(RAW_DATA_PATH, "cifar10")
     trainset = CIFAR10(path, train=True, download=True, transform=transform)
     testset = CIFAR10(path, train=False, download=True, transform=transform)
