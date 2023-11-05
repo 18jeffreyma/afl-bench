@@ -72,11 +72,19 @@ strategy = Strategy(
     aggregate=aggregation_func,
 )
 
-# Define a server where global model is a SimpleCNN and strategy is the one defined above.
-server = Server(CIFAR10SimpleCNN(), strategy, run.config["num_server_aggregations"])
 
 # Assemble a list of all client threads.
 trainloaders, testloaders, _ = load_cifar10(run.config["num_clients"])
+
+# Instantiate runtime models.
+runtime_models = [InstantRuntime() for _ in range(run.config["num_clients"])]
+
+####################################################################################################
+# NOTE: NOTHING BELOW THIS LINE SHOULD BE CHANGED.                                                 #
+####################################################################################################
+
+# Define a server where global model is a SimpleCNN and strategy is the one defined above.
+server = Server(CIFAR10SimpleCNN(), strategy, run.config["num_server_aggregations"])
 
 # Create client threads with models. Note runtime is instant (meaning no simulated training delay).
 client_threads = []
@@ -85,7 +93,7 @@ for i in range(run.config["num_clients"]):
         CIFAR10SimpleCNN(), trainloaders[i], testloaders[i], run.config["client_lr"]
     )
     client_thread = ClientThread(
-        client, server, runtime_model=InstantRuntime(), client_id=i
+        client, server, runtime_model=runtime_models[i], client_id=i
     )
     client_threads.append(client_thread)
 
