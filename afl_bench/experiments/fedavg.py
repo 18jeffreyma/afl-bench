@@ -1,21 +1,45 @@
-from typing import List
 import logging
+from typing import List
 
 import torch
 
-from afl_bench.agents import Server, ClientThread, Strategy
+import wandb
+from afl_bench.agents import ClientThread, Server, Strategy
 from afl_bench.agents.clients import Client
 from afl_bench.agents.runtime_model import InstantRuntime
 from afl_bench.datasets.uniform.cifar10 import load_datasets
 from afl_bench.models import SimpleCNN
 from afl_bench.types import ClientUpdate, ModelParams
 
-# set logger level
+# Optional: set logging level to DEBUG to see more detailed logs.
 logging.basicConfig(level=logging.DEBUG)
 
+# Run parameters.
 
-# Define strategy and aggregation function.
+# Start a new wandb run to track this script
+run = wandb.init(
+    # set the wandb project where this run will be logged
+    project="afl-bench",
+    entity="afl-bench",
+    # track hyperparameters and run metadata
+    config={
+        "description": "Fed Avg on CIFAR-100",
+        "architecture": "SimpleCNN",
+        "dataset": "CIFAR10",
+        "wait_for_full": True,
+        "buffer_size": 4,
+        "ms_to_wait": None,
+        "num_clients": 4,
+        "client_lr": 0.001,
+        "num_server_aggregations": 10,
+    },
+)
+
+
 def aggregation_func(global_model: ModelParams, client_updates: List[ClientUpdate]):
+    """
+    Define strategy and aggregation function.
+    """
     # Client updates have the following nesting:
     #  - client_update[i] = (old_model, new_model, old_model_index) is the i-th update in the buffer
     # We pivot this such that we have a list of old models, new models to diff updates.
@@ -39,20 +63,30 @@ def aggregation_func(global_model: ModelParams, client_updates: List[ClientUpdat
     ]
 
 
+# Note that we wait for full buffer and specify buffer size.
 strategy = Strategy(
-    name="JeffTest", wait_for_full=True, buffer_size=4, aggregate=aggregation_func
+    name="JeffTest",
+    wait_for_full=run.config["wait_for_full"],
+    buffer_size=run.config["buffer_size"],
+    ms_to_wait=run.config["ms_to_wait"],
+    aggregate=aggregation_func,
 )
 
-server = Server(SimpleCNN(), strategy)
+# Define a server where global model is a SimpleCNN and strategy is the one defined above.
+server = Server(SimpleCNN(), strategy, run.config["num_server_aggregations"])
 
 # Assemble a list of all client threads.
-num_clients = 4
-trainloaders, testloaders, _ = load_datasets(num_clients)
+trainloaders, testloaders, _ = load_datasets(run.config["num_clients"])
 
+# Create client threads with models. Note runtime is instant (meaning no simulated training delay).
 client_threads = []
-for i in range(num_clients):
-    client = Client(SimpleCNN(), trainloaders[i], testloaders[i])
-    client_thread = ClientThread(client, server, runtime_model=InstantRuntime())
+for i in range(run.config["num_clients"]):
+    client = Client(
+        SimpleCNN(), trainloaders[i], testloaders[i], run.config["client_lr"]
+    )
+    client_thread = ClientThread(
+        client, server, runtime_model=InstantRuntime(), client_id=i
+    )
     client_threads.append(client_thread)
 
 # Start up server and start up all client threads.

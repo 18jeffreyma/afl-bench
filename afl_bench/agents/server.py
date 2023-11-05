@@ -1,5 +1,6 @@
-
+import logging
 from abc import abstractmethod
+from itertools import count
 from threading import Lock, Thread
 from typing import Tuple
 
@@ -7,8 +8,8 @@ from afl_bench.agents.buffer import Buffer
 from afl_bench.agents.common import get_parameters, set_parameters
 from afl_bench.agents.strategies import ModelParams, Strategy
 
-import logging
 logger = logging.getLogger(__name__)
+
 
 class ServerInterface:
     @abstractmethod
@@ -16,14 +17,10 @@ class ServerInterface:
         """
         Get the current global model parameters.
         """
-        pass
-    
+
     @abstractmethod
     def broadcast_updated_model(
-        self, 
-        old_params: ModelParams,
-        new_params: ModelParams,
-        version_number: int
+        self, old_params: ModelParams, new_params: ModelParams, version_number: int
     ):
         """
         Upon completion of local training, the client calls this method to
@@ -35,20 +32,21 @@ class ServerInterface:
             new_params: model parameters after training (i.e. the new global model)
             version_number: the version number of the old global model used.
         """
-        pass
 
 
 class Server(ServerInterface):
-    def __init__(self, initial_model, strategy: Strategy):
+    def __init__(self, initial_model, strategy: Strategy, num_aggregations: int):
         self.model = initial_model
         self.version_number = 0
-        
+
         self.strategy = strategy
+        self.num_aggregations = num_aggregations
 
         self.buffer = Buffer(
             wait_for_full=strategy.wait_for_full,
             n=strategy.buffer_size,
-            ms_to_wait=strategy.ms_to_wait)
+            ms_to_wait=strategy.ms_to_wait,
+        )
 
         self.model_mutex = Lock()
         self.is_running = False
@@ -59,31 +57,48 @@ class Server(ServerInterface):
             return get_parameters(self.model), self.version_number
 
     def broadcast_updated_model(
-        self, 
-        old_params: ModelParams, 
-        new_params: ModelParams, 
-        version_number: int
+        self, old_params: ModelParams, new_params: ModelParams, version_number: int
     ):
+        logger.info(
+            "Received an update from a client from global model version %d.",
+            version_number,
+        )
         self.buffer.add((old_params, new_params, version_number))
-    
+
     def run(self):
+        """
+        Start the server thread.
+        """
+
         def run_impl():
-            while self.is_running:
+            for i in count():
+                if not self.is_running or i >= self.num_aggregations:
+                    logger.info("Aggregation loop terminating...")
+                    break
+
                 # Waits until aggregation buffer is ready to dispense items when called.
-                # TODO: Add optional time delay?
                 aggregated_updates = self.buffer.get_items()
-                logger.info("Server thread running aggregation.")
+
+                if len(aggregated_updates) == 0:
+                    logger.info("No updates in buffer to aggregate, skipping.")
+                    continue
+
+                logger.info(
+                    "Server thread running aggregation with %d updates.",
+                    len(aggregated_updates),
+                )
 
                 # Aggregate and update model.
                 model_update = self.strategy.aggregate(
-                    self.model.parameters(), aggregated_updates)
-                
+                    self.model.parameters(), aggregated_updates
+                )
+
                 # Acquire model lock and update current global model.
                 with self.model_mutex:
                     logger.info("Server thread updating global model.")
                     set_parameters(self.model, model_update)
                     self.version_number += 1
-                     
+
         # Initialize thread once only
         if self.thread is None:
             self.is_running = True
@@ -91,10 +106,12 @@ class Server(ServerInterface):
             self.thread.start()
         else:
             raise RuntimeError("Server thread already running!")
-        
+
     def stop(self):
+        """
+        Stop the server thread.
+        """
         if self.thread is not None:
             self.is_running = False
             self.thread.join()
             self.thread = None
-    

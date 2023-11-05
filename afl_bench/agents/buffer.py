@@ -19,7 +19,7 @@ class Buffer:
                 Defaults to None.
         """
         assert wait_for_full != (
-            ms_to_wait is None
+            ms_to_wait is not None
         ), "Must specify one of wait_for_full or ms_to_wait."
         assert not (
             wait_for_full and n is None
@@ -65,9 +65,23 @@ class Buffer:
                 time.sleep(self.ms_to_wait / 1000)
 
             # Slice out first length elements (or all elements if buffer is not full)
-            slice_length = min(self.n, len(self.buffer))
+            slice_length = (
+                min(self.n, len(self.buffer))
+                if self.n is not None
+                else len(self.buffer)
+            )
 
             relevant_slice = self.buffer[:slice_length]
             self.buffer = self.buffer[slice_length:]
 
             return relevant_slice
+
+    def __len__(self) -> int:
+        """
+        Get the length of the buffer.
+
+        Returns:
+            int: length of the buffer.
+        """
+        with self.mutex:
+            return len(self.buffer)
