@@ -7,8 +7,8 @@ import wandb
 from afl_bench.agents import ClientThread, Server, Strategy
 from afl_bench.agents.clients import Client
 from afl_bench.agents.runtime_model import InstantRuntime
-from afl_bench.datasets.uniform.cifar10 import load_datasets
-from afl_bench.models import SimpleCNN
+from afl_bench.datasets.uniform.cifar10 import load_cifar10
+from afl_bench.models.simple_cnn import CIFAR10SimpleCNN
 from afl_bench.types import ClientUpdate, ModelParams
 
 # Optional: set logging level to DEBUG to see more detailed logs.
@@ -23,7 +23,7 @@ run = wandb.init(
     entity="afl-bench",
     # track hyperparameters and run metadata
     config={
-        "description": "Fed Avg on CIFAR-100",
+        "description": "FedAvg on CIFAR-100",
         "architecture": "SimpleCNN",
         "dataset": "CIFAR10",
         "wait_for_full": True,
@@ -73,16 +73,16 @@ strategy = Strategy(
 )
 
 # Define a server where global model is a SimpleCNN and strategy is the one defined above.
-server = Server(SimpleCNN(), strategy, run.config["num_server_aggregations"])
+server = Server(CIFAR10SimpleCNN(), strategy, run.config["num_server_aggregations"])
 
 # Assemble a list of all client threads.
-trainloaders, testloaders, _ = load_datasets(run.config["num_clients"])
+trainloaders, testloaders, _ = load_cifar10(run.config["num_clients"])
 
 # Create client threads with models. Note runtime is instant (meaning no simulated training delay).
 client_threads = []
 for i in range(run.config["num_clients"]):
     client = Client(
-        SimpleCNN(), trainloaders[i], testloaders[i], run.config["client_lr"]
+        CIFAR10SimpleCNN(), trainloaders[i], testloaders[i], run.config["client_lr"]
     )
     client_thread = ClientThread(
         client, server, runtime_model=InstantRuntime(), client_id=i
@@ -93,3 +93,10 @@ for i in range(run.config["num_clients"]):
 server.run()
 for client_thread in client_threads:
     client_thread.run()
+
+# Kill client threads once server stops.
+server.join()
+for client_thread in client_threads:
+    client_thread.stop()
+
+wandb.finish()

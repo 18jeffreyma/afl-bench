@@ -115,3 +115,11 @@ class Server(ServerInterface):
             self.is_running = False
             self.thread.join()
             self.thread = None
+
+    def join(self):
+        """
+        Wait for the thread to terminate.
+        """
+        if self.thread is not None:
+            self.thread.join()
+            self.thread = None
