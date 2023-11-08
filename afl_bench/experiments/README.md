@@ -10,7 +10,7 @@ To run experiments using an experiment file, follow these steps:
 For example, try the following script:
 
 ```[bash]
-python afl_bench/experiments/fedavg_cifar10.py -dd iid -wff -bs 4 --num-clients 4 --num-aggregations 10
+python3 afl_bench/experiments/fedavg_cifar10_iid.py python afl_bench/experiments/fedavg_cifar10.py -dd iid -wff -bs 4 --num-clients 4 --num-aggregations 10
 ```
 
 The script will train a federated averaging model on the specified dataset and hyperparameters.
