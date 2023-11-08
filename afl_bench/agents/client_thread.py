@@ -27,11 +27,18 @@ class ClientThread:
 
     def run(self, train_config={}, eval_config={}):
         def run_impl():
-            while self.is_running:
-                logger.info("Client thread running local training.")
+            prev_version = None
 
+            while self.is_running:
                 # Get latest global model and simulate client runtime.
-                init_global_params, version = self.server.get_current_model()
+                init_global_params, version = self.server.get_current_model(
+                    prev_version=prev_version
+                )
+
+                logger.info(
+                    "Client thread running local training on model version %d",
+                    version,
+                )
 
                 # Simulate slow client runtime and fit model to local data.
                 time.sleep(self.runtime_model.sample_runtime())
@@ -60,10 +67,14 @@ class ClientThread:
                     }
                 )
 
-                # Broadcast updated model to server.
-                self.server.broadcast_updated_model(
+                # Broadcast updated model to server. If server indicates not running, stop.
+                server_running = self.server.broadcast_updated_model(
                     init_global_params, new_parameters, version
                 )
+                prev_version = version
+
+                if not server_running:
+                    self.is_running = False
 
         # Initialize thread once only
         if self.thread is None:

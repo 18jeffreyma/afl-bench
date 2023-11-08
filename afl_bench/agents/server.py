@@ -1,8 +1,8 @@
 import logging
 from abc import abstractmethod
 from itertools import count
-from threading import Lock, Thread
-from typing import Tuple
+from threading import Condition, Lock, Thread
+from typing import Optional, Tuple
 
 from afl_bench.agents.buffer import Buffer
 from afl_bench.agents.common import get_parameters, set_parameters
@@ -13,7 +13,9 @@ logger = logging.getLogger(__name__)
 
 class ServerInterface:
     @abstractmethod
-    def get_current_model(self) -> Tuple[ModelParams, int]:
+    def get_current_model(
+        self, prev_version: Optional[int] = None
+    ) -> Tuple[ModelParams, int]:
         """
         Get the current global model parameters.
         """
@@ -49,11 +51,22 @@ class Server(ServerInterface):
         )
 
         self.model_mutex = Lock()
+        self.model_cv = Condition(self.model_mutex)
+
         self.is_running = False
         self.thread = None
 
-    def get_current_model(self) -> Tuple[ModelParams, int]:
+    def get_current_model(
+        self, prev_version: Optional[int] = None
+    ) -> Tuple[ModelParams, int]:
         with self.model_mutex:
+            while (prev_version is not None) and (prev_version == self.version_number):
+                # Wait until the model has been updated before letting agent pull.
+                logger.info(
+                    "Waiting for global model update from version %d...", prev_version
+                )
+                self.model_cv.wait()
+
             return get_parameters(self.model), self.version_number
 
     def broadcast_updated_model(
@@ -64,6 +77,7 @@ class Server(ServerInterface):
             version_number,
         )
         self.buffer.add((old_params, new_params, version_number))
+        return self.thread is not None
 
     def run(self):
         """
@@ -84,7 +98,8 @@ class Server(ServerInterface):
                     continue
 
                 logger.info(
-                    "Server thread running aggregation with %d updates.",
+                    "Server thread running aggregation for new version %d with %d updates.",
+                    self.version_number + 1,
                     len(aggregated_updates),
                 )
 
@@ -93,11 +108,15 @@ class Server(ServerInterface):
                     self.model.parameters(), aggregated_updates
                 )
 
-                # Acquire model lock and update current global model.
+                # Acquire model lock and update current global model. Notify any waiting threads.
                 with self.model_mutex:
-                    logger.info("Server thread updating global model.")
+                    logger.info(
+                        "Server thread updating global model to version %d.",
+                        self.version_number + 1,
+                    )
                     set_parameters(self.model, model_update)
                     self.version_number += 1
+                    self.model_cv.notify_all()
 
         # Initialize thread once only
         if self.thread is None:
