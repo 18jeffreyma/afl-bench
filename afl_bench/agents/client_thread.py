@@ -3,6 +3,7 @@ import time
 from threading import Thread
 
 import wandb
+
 from afl_bench.agents.clients import Client
 from afl_bench.agents.runtime_model import RuntimeModel
 from afl_bench.agents.server import ServerInterface

@@ -1,4 +1,5 @@
 from typing import Callable, List, Optional
+
 from pydantic import BaseModel
 
 from afl_bench.types import ClientUpdate, ModelParams

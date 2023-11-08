@@ -1,5 +1,5 @@
-from threading import Lock, Condition
 import time
+from threading import Condition, Lock
 from typing import List
 
 from afl_bench.types import ClientUpdate
