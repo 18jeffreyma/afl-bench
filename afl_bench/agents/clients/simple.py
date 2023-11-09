@@ -1,4 +1,5 @@
 import torch
+from torch.profiler import ProfilerActivity, profile, record_function
 
 from afl_bench.agents.common import get_parameters, set_parameters
 
@@ -56,7 +57,9 @@ def _train(net, trainloader, num_steps: int, device="cpu", lr=0.001):
                 keep_running = False
                 break
 
-            images, labels = images.to(device), labels.to(device)
+            images = images.to(device, non_blocking=True)
+            labels = labels.to(device, non_blocking=True)
+
             optimizer.zero_grad()
             outputs = net(images)
             loss = criterion(outputs, labels)

@@ -11,7 +11,12 @@ from afl_bench.datasets.utils import (
 
 
 def distribute_datasets(
-    train_eval_datasets, test_dataset, batch_size=32, pin_memory=True
+    train_eval_datasets,
+    test_dataset,
+    batch_size=32,
+    pin_memory=True,
+    device="cuda",
+    num_workers=8,
 ):
     # Split each partition into train/val and create DataLoader
     trainloaders = []
@@ -23,13 +28,24 @@ def distribute_datasets(
         ds_train, ds_val = random_split(ds, lengths, torch.Generator().manual_seed(42))
         trainloaders.append(
             DataLoader(
-                ds_train, batch_size=batch_size, shuffle=True, pin_memory=pin_memory
+                ds_train,
+                batch_size=batch_size,
+                shuffle=True,
+                num_workers=num_workers,
             )
         )
         valloaders.append(
-            DataLoader(ds_val, batch_size=batch_size, pin_memory=pin_memory)
+            DataLoader(
+                ds_val,
+                batch_size=batch_size,
+                num_workers=num_workers,
+            )
         )
-    testloader = DataLoader(test_dataset, batch_size=batch_size, pin_memory=pin_memory)
+    testloader = DataLoader(
+        test_dataset,
+        batch_size=batch_size,
+        num_workers=num_workers,
+    )
     return trainloaders, valloaders, testloader
 
 

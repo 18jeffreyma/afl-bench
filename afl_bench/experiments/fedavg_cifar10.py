@@ -20,7 +20,7 @@ from afl_bench.types import ClientUpdate, ModelParams
 
 # Set logging level to DEBUG to see more detailed logs.
 logging.basicConfig(
-    level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -49,7 +49,7 @@ if __name__ == "__main__":
             "client_num_steps": args["client_num_steps"],
             "num_aggregations": args["num_aggregations"],
             "batch_size": args["batch_size"],
-            "device": "mps",
+            "device": "cuda",
         },
     )
 
