@@ -4,10 +4,13 @@ from afl_bench.agents.common import get_parameters, set_parameters
 
 
 class Client:
-    def __init__(self, net, trainloader, valloader, lr=0.001, device="cpu"):
+    def __init__(
+        self, net, trainloader, valloader, num_steps=10, lr=0.001, device="cpu"
+    ):
         self.net = net
         self.trainloader = trainloader
         self.valloader = valloader
+        self.num_steps = num_steps
         self.lr = lr
         self.device = device
 
@@ -17,7 +20,7 @@ class Client:
     def fit(self, parameters, config):
         set_parameters(self.net, parameters)
         avg_epoch_loss, avg_epoch_acc = _train(
-            self.net, self.trainloader, epochs=1, device=self.device, lr=self.lr
+            self.net, self.trainloader, self.num_steps, device=self.device, lr=self.lr
         )
         return (
             get_parameters(self.net),
@@ -35,38 +38,39 @@ class Client:
         return float(loss), len(self.valloader), {"accuracy": float(accuracy)}
 
 
-def _train(net, trainloader, epochs: int, device="cpu", lr=0.001):
+def _train(net, trainloader, num_steps: int, device="cpu", lr=0.001):
     """Train the network on the training set."""
     criterion = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(net.parameters(), lr=lr)
     net.train()
 
-    total_epoch_losses = 0.0
-    total_epoch_accs = 0.0
+    step_count = 0
+    total_count = 0
+    correct_count = 0
 
-    for _ in range(epochs):
-        correct, total, epoch_loss = 0, 0, 0.0
+    keep_running = True
+
+    while keep_running:
         for images, labels in trainloader:
+            if step_count >= num_steps:
+                keep_running = False
+                break
+
             images, labels = images.to(device), labels.to(device)
             optimizer.zero_grad()
             outputs = net(images)
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
+
             # Metrics
             with torch.no_grad():
-                epoch_loss += loss
-                total += labels.size(0)
-                correct += (torch.max(outputs.data, 1)[1] == labels).sum().item()
+                total_count += labels.size(0)
+                correct_count += (torch.max(outputs.data, 1)[1] == labels).sum().item()
 
-        with torch.no_grad():
-            epoch_loss /= len(trainloader.dataset)
-            epoch_acc = correct / total
+            step_count += 1
 
-            total_epoch_losses += epoch_loss
-            total_epoch_accs += epoch_acc
-
-    return total_epoch_losses / epochs, total_epoch_accs / epochs
+    return loss.detach().clone(), correct_count / total_count
 
 
 def _test(net, testloader, device="cpu"):

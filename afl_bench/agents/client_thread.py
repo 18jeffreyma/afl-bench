@@ -3,7 +3,6 @@ import time
 from threading import Thread
 
 import wandb
-
 from afl_bench.agents.clients import Client
 from afl_bench.agents.runtime_model import RuntimeModel
 from afl_bench.agents.server import ServerInterface
@@ -49,7 +48,7 @@ class ClientThread:
 
                 wandb.log(
                     {
-                        f"client/{self.client_id}": {
+                        f"client.{self.client_id}": {
                             **new_metrics,
                             "global_version": version,
                         }

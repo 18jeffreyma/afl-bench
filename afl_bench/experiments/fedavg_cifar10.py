@@ -1,4 +1,5 @@
 import logging
+from functools import partial
 from typing import List
 
 import torch
@@ -10,6 +11,7 @@ from afl_bench.agents.runtime_model import InstantRuntime
 from afl_bench.datasets.cifar10 import (
     load_cifar10_iid,
     load_cifar10_one_class_per_client,
+    load_cifar10_randomly_remove,
     load_cifar10_sorted_partition,
 )
 from afl_bench.experiments.utils import get_cmd_line_parser
@@ -31,18 +33,20 @@ if __name__ == "__main__":
         # set the wandb project where this run will be logged
         project="afl-bench",
         entity="afl-bench",
+        name=f"FedAvg CIFAR-10 {args['data_distribution'] + ((' ' + str(args['num_remove'])) if args['num_remove'] is not None else '')}, {args['num_clients']} clients, instant runtime",
         # track hyperparameters and run metadata
         config={
-            "name": f"FedAvg CIFAR-10 {args['data_distribution']}, {args['num_clients']} clients",
             "description": "FedAvg on CIFAR-10",
             "architecture": "SimpleCNN",
             "dataset": "CIFAR10",
             "data_distribution": args["data_distribution"],
+            "num_remove": args["num_remove"],
             "wait_for_full": args["wait_for_full"],
             "buffer_size": args["buffer_size"],
             "ms_to_wait": args["ms_to_wait"],
             "num_clients": args["num_clients"],
             "client_lr": args["client_lr"],
+            "client_num_steps": args["client_num_steps"],
             "num_aggregations": args["num_aggregations"],
             "batch_size": args["batch_size"],
             "device": "cuda",
@@ -94,6 +98,9 @@ if __name__ == "__main__":
         "iid": load_cifar10_iid,
         "one_class_per_client": load_cifar10_one_class_per_client,
         "sorted_partition": load_cifar10_sorted_partition,
+        "randomly_remove": partial(
+            load_cifar10_randomly_remove, run.config["num_remove"]
+        ),
     }
     load_function = load_functions[run.config["data_distribution"]]
 
@@ -125,7 +132,8 @@ if __name__ == "__main__":
             CIFAR10SimpleCNN().to(run.config["device"]),
             trainloaders[i],
             testloaders[i],
-            run.config["client_lr"],
+            num_steps=run.config["client_num_steps"],
+            lr=run.config["client_lr"],
             device=run.config["device"],
         )
         client_thread = ClientThread(

@@ -1,3 +1,5 @@
+import random
+
 from torch._utils import _accumulate
 from torch.utils.data import Subset
 
@@ -35,5 +37,33 @@ def one_class_partition(dataset, labels, num_classes, num_agents):
     for i in range(num_classes):
         label_indices = [j for j, x in enumerate(labels) if x == i]
         agent_indices.extend(split_list(label_indices, num_agents_per_class))
+
+    return [Subset(dataset, agent_indices[i]) for i in range(num_agents)]
+
+
+def randomly_remove_labels(dataset, labels, num_classes, num_to_remove, num_agents):
+    assert num_to_remove < num_classes
+
+    # Randomly sample which agents will have which labels.
+    agent_labels = []
+    for _ in range(num_agents):
+        agent_labels.append(
+            random.sample(range(num_classes), num_classes - num_to_remove)
+        )
+
+    random.shuffle(labels)
+
+    # Of these agents, for each label, evenly distribute to agents who need that label.
+    agent_indices = [[] for _ in range(num_agents)]
+    for i in range(num_classes):
+        label_indices = [j for j, x in enumerate(labels) if x == i]
+        matched_agents = [j for j in range(num_agents) if i in agent_labels[j]]
+
+        chunk_size = len(label_indices) // len(matched_agents)
+
+        for j, matched_agent in enumerate(matched_agents):
+            agent_indices[matched_agent].extend(
+                label_indices[j * chunk_size : (j + 1) * chunk_size]
+            )
 
     return [Subset(dataset, agent_indices[i]) for i in range(num_agents)]
