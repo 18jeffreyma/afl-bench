@@ -4,7 +4,11 @@ from itertools import count
 from threading import Condition, Lock, Thread
 from typing import Optional, Tuple
 
+from torch.utils.data import DataLoader
+
+import wandb
 from afl_bench.agents.buffer import Buffer
+from afl_bench.agents.clients.simple import _test
 from afl_bench.agents.common import get_parameters, set_parameters
 from afl_bench.agents.strategies import ModelParams, Strategy
 
@@ -37,7 +41,14 @@ class ServerInterface:
 
 
 class Server(ServerInterface):
-    def __init__(self, initial_model, strategy: Strategy, num_aggregations: int):
+    def __init__(
+        self,
+        initial_model,
+        strategy: Strategy,
+        num_aggregations: int,
+        test_dataloader: DataLoader,
+        device="cuda",
+    ):
         self.model = initial_model
         self.version_number = 0
 
@@ -55,6 +66,9 @@ class Server(ServerInterface):
 
         self.is_running = False
         self.thread = None
+
+        self.test_dataloader = test_dataloader
+        self.device = device
 
     def get_current_model(
         self, prev_version: Optional[int] = None
@@ -115,6 +129,23 @@ class Server(ServerInterface):
                         self.version_number + 1,
                     )
                     set_parameters(self.model, model_update)
+
+                    _, accuracy = _test(
+                        self.model, self.test_dataloader, device=self.device
+                    )
+                    wandb.log(
+                        {
+                            "server": {
+                                **{
+                                    "accuracy": accuracy,
+                                    "version": self.version_number + 1,
+                                    "num_updates": len(aggregated_updates),
+                                },
+                                "global_version": self.version_number + 1,
+                            }
+                        }
+                    )
+
                     self.version_number += 1
                     self.model_cv.notify_all()
 

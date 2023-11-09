@@ -17,7 +17,7 @@ class Client:
     def fit(self, parameters, config):
         set_parameters(self.net, parameters)
         avg_epoch_loss, avg_epoch_acc = _train(
-            self.net, self.trainloader, epochs=5, device=self.device, lr=self.lr
+            self.net, self.trainloader, epochs=1, device=self.device, lr=self.lr
         )
         return (
             get_parameters(self.net),

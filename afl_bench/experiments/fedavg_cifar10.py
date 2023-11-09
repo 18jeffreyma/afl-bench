@@ -33,7 +33,8 @@ if __name__ == "__main__":
         entity="afl-bench",
         # track hyperparameters and run metadata
         config={
-            "description": "FedAvg on CIFAR-10 IID",
+            "name": f"FedAvg CIFAR-10 {args['data_distribution']}, {args['num_clients']} clients",
+            "description": "FedAvg on CIFAR-10",
             "architecture": "SimpleCNN",
             "dataset": "CIFAR10",
             "data_distribution": args["data_distribution"],
@@ -96,7 +97,7 @@ if __name__ == "__main__":
     }
     load_function = load_functions[run.config["data_distribution"]]
 
-    trainloaders, testloaders, _ = load_function(
+    trainloaders, testloaders, global_testloader = load_function(
         run.config["num_clients"], batch_size=run.config["batch_size"]
     )
 
@@ -112,6 +113,8 @@ if __name__ == "__main__":
         CIFAR10SimpleCNN().to(run.config["device"]),
         strategy,
         run.config["num_aggregations"],
+        global_testloader,
+        device=run.config["device"],
     )
 
     # Create client threads with models. Note runtime is instant
