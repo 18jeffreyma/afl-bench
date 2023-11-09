@@ -4,9 +4,13 @@ import torch
 
 
 def get_parameters(net) -> List[torch.Tensor]:
-    return [val.detach().clone() for _, val in net.state_dict().items()]
+    return [val for val in net.parameters()]
 
 
 def set_parameters(net, parameters: List[torch.Tensor]):
-    state_dict = dict(zip(net.state_dict().keys(), parameters))
-    net.load_state_dict(state_dict, strict=True)
+    for p, new_p in zip(net.parameters(), parameters):
+        if p.grad is not None:
+            p.grad.detach()
+            p.grad.zero_()
+        # Update the parameter.
+        p.data.copy_(new_p)

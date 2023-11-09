@@ -45,7 +45,7 @@ if __name__ == "__main__":
             "client_lr": args["client_lr"],
             "num_aggregations": args["num_aggregations"],
             "batch_size": args["batch_size"],
-            "device": "cuda",
+            "device": "mps",
         },
     )
 
