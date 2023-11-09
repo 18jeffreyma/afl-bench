@@ -49,7 +49,7 @@ if __name__ == "__main__":
             "client_num_steps": args["client_num_steps"],
             "num_aggregations": args["num_aggregations"],
             "batch_size": args["batch_size"],
-            "device": "cuda",
+            "device": "mps",
         },
     )
 
