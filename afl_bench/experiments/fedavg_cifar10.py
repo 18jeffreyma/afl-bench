@@ -44,6 +44,7 @@ if __name__ == "__main__":
             "client_lr": args["client_lr"],
             "num_aggregations": args["num_aggregations"],
             "batch_size": args["batch_size"],
+            "device": "cuda",
         },
     )
 
@@ -107,14 +108,22 @@ if __name__ == "__main__":
     #########################################################################################
 
     # Define a server where global model is a SimpleCNN and strategy is the one defined above.
-    server = Server(CIFAR10SimpleCNN(), strategy, run.config["num_aggregations"])
+    server = Server(
+        CIFAR10SimpleCNN().to(run.config["device"]),
+        strategy,
+        run.config["num_aggregations"],
+    )
 
     # Create client threads with models. Note runtime is instant
     # (meaning no simulated training delay).
     client_threads = []
     for i in range(run.config["num_clients"]):
         client = Client(
-            CIFAR10SimpleCNN(), trainloaders[i], testloaders[i], run.config["client_lr"]
+            CIFAR10SimpleCNN().to(run.config["device"]),
+            trainloaders[i],
+            testloaders[i],
+            run.config["client_lr"],
+            device=run.config["device"],
         )
         client_thread = ClientThread(
             client, server, runtime_model=runtime_models[i], client_id=i

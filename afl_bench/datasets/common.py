@@ -11,6 +11,7 @@ def load_datasets_iid(
     test_set: torch.utils.data.Dataset,
     num_clients: int,
     batch_size=32,
+    pin_memory=True,
 ) -> Tuple[List[DataLoader], List[DataLoader], DataLoader]:
     """
     Split training set into 10 partitions to simulate the individual dataset.
@@ -27,9 +28,15 @@ def load_datasets_iid(
         len_train = len(ds) - len_val
         lengths = [len_train, len_val]
         ds_train, ds_val = random_split(ds, lengths, torch.Generator().manual_seed(42))
-        trainloaders.append(DataLoader(ds_train, batch_size=batch_size, shuffle=True))
-        valloaders.append(DataLoader(ds_val, batch_size=batch_size))
-    testloader = DataLoader(test_set, batch_size=batch_size)
+        trainloaders.append(
+            DataLoader(
+                ds_train, batch_size=batch_size, shuffle=True, pin_memory=pin_memory
+            )
+        )
+        valloaders.append(
+            DataLoader(ds_val, batch_size=batch_size, pin_memory=pin_memory)
+        )
+    testloader = DataLoader(test_set, batch_size=batch_size, pin_memory=pin_memory)
     return trainloaders, valloaders, testloader
 
 
@@ -38,6 +45,7 @@ def load_datasets_sorted_partition(
     test_set: torch.utils.data.Dataset,
     num_clients: int,
     batch_size=32,
+    pin_memory=True,
 ) -> Tuple[List[DataLoader], List[DataLoader], DataLoader]:
     """
     Load datasets such that each client has a sorted even-length partition of the dataset.
@@ -57,10 +65,16 @@ def load_datasets_sorted_partition(
         len_train = len(ds) - len_val
         lengths = [len_train, len_val]
         ds_train, ds_val = random_split(ds, lengths, torch.Generator().manual_seed(42))
-        trainloaders.append(DataLoader(ds_train, batch_size=batch_size, shuffle=True))
-        valloaders.append(DataLoader(ds_val, batch_size=batch_size))
+        trainloaders.append(
+            DataLoader(
+                ds_train, batch_size=batch_size, shuffle=True, pin_memory=pin_memory
+            )
+        )
+        valloaders.append(
+            DataLoader(ds_val, batch_size=batch_size, pin_memory=pin_memory)
+        )
 
-    testloader = DataLoader(test_set, batch_size=batch_size)
+    testloader = DataLoader(test_set, batch_size=batch_size, pin_memory=pin_memory)
     return trainloaders, valloaders, testloader
 
 
@@ -70,6 +84,7 @@ def load_datasets_one_class_per_client(
     num_classes: int,
     num_clients: int,
     batch_size=32,
+    pin_memory=True,
 ) -> Tuple[List[DataLoader], List[DataLoader], DataLoader]:
     """
     Return dataloader such that each client has only one class.
@@ -88,8 +103,14 @@ def load_datasets_one_class_per_client(
         len_train = len(ds) - len_val
         lengths = [len_train, len_val]
         ds_train, ds_val = random_split(ds, lengths, torch.Generator().manual_seed(42))
-        trainloaders.append(DataLoader(ds_train, batch_size=batch_size, shuffle=True))
-        valloaders.append(DataLoader(ds_val, batch_size=batch_size))
+        trainloaders.append(
+            DataLoader(
+                ds_train, batch_size=batch_size, shuffle=True, pin_memory=pin_memory
+            )
+        )
+        valloaders.append(
+            DataLoader(ds_val, batch_size=batch_size, pin_memory=pin_memory)
+        )
 
-    testloader = DataLoader(test_set, batch_size=batch_size)
+    testloader = DataLoader(test_set, batch_size=batch_size, pin_memory=pin_memory)
     return trainloaders, valloaders, testloader

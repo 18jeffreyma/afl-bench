@@ -4,18 +4,21 @@ from afl_bench.agents.common import get_parameters, set_parameters
 
 
 class Client:
-    def __init__(self, net, trainloader, valloader, lr=0.001):
+    def __init__(self, net, trainloader, valloader, lr=0.001, device="cpu"):
         self.net = net
         self.trainloader = trainloader
         self.valloader = valloader
         self.lr = lr
+        self.device = device
 
     def get_parameters(self, config):
         return get_parameters(self.net)
 
     def fit(self, parameters, config):
         set_parameters(self.net, parameters)
-        avg_epoch_loss, avg_epoch_acc = _train(self.net, self.trainloader, epochs=1)
+        avg_epoch_loss, avg_epoch_acc = _train(
+            self.net, self.trainloader, epochs=5, device=self.device, lr=self.lr
+        )
         return (
             get_parameters(self.net),
             len(self.trainloader),
@@ -28,11 +31,11 @@ class Client:
 
     def evaluate(self, parameters, config):
         set_parameters(self.net, parameters)
-        loss, accuracy = _test(self.net, self.valloader)
+        loss, accuracy = _test(self.net, self.valloader, device=self.device)
         return float(loss), len(self.valloader), {"accuracy": float(accuracy)}
 
 
-def _train(net, trainloader, epochs: int, device="cpu", verbose=False, lr=0.001):
+def _train(net, trainloader, epochs: int, device="cpu", lr=0.001):
     """Train the network on the training set."""
     criterion = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(net.parameters(), lr=lr)
