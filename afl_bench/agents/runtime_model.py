@@ -13,12 +13,15 @@ class RuntimeModel(ABC):
 
 
 class InstantRuntime(RuntimeModel):
+    def __init__(self, delay) -> None:
+        self.delay = delay
+
     def sample_runtime(self) -> float:
-        return 0.0
+        return self.delay
 
 
 class GaussianRuntime(RuntimeModel):
-    def __init__(self, mean=1, variance=1) -> None:
+    def __init__(self, mean, variance) -> None:
         self.mean = mean
         self.variance = variance
 

@@ -10,6 +10,7 @@ from afl_bench.datasets import RAW_DATA_PATH
 from afl_bench.datasets.common import (
     load_datasets_iid,
     load_datasets_one_class_per_client,
+    load_datasets_randomly_remove,
     load_datasets_sorted_partition,
 )
 
@@ -68,4 +69,18 @@ def load_fashion_mnist_one_class_per_client(
 
     return load_datasets_one_class_per_client(
         train_set, test_set, 10, num_clients, batch_size=batch_size
+    )
+
+
+@cache
+def load_fashion_mnist_randomly_remove(
+    num_remove, num_clients, batch_size=32
+) -> Tuple[List[DataLoader], List[DataLoader], DataLoader]:
+    """
+    Return dataloader such that each client has one class.
+    """
+
+    train_set, test_set = get_fashion_mnist()
+    return load_datasets_randomly_remove(
+        num_remove, train_set, test_set, 10, num_clients, batch_size=batch_size
     )
