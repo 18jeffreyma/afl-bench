@@ -35,6 +35,13 @@ def aggregation_func(
     new_models: List[ModelParams] = tuple(zip(*client_updates))[1]
     prev_model_versions: List[int] = tuple(zip(*client_updates))[2]
 
+    # Compute weights for each client update, weighting more recent updates more heavily.
+    weights = [(0.5 ** ((version - v) / 2)) for v in prev_model_versions]
+    total_weights = sum(weights)
+    normalized_weights = [w / total_weights for w in weights]
+
+    logger.info("Aggregation weights: %s", normalized_weights)
+
     # Get list of length num clients with each element being a tuple of name and parameter.
     new_global_model = []
     for param_names_and_tensors, (global_param_name, global_param) in zip(
@@ -44,17 +51,17 @@ def aggregation_func(
 
         # Sanity check names.
         assert param_name == global_param_name
-        tensors = [t for _, t in param_names_and_tensors]
-
+        assert len(normalized_weights) == len(param_names_and_tensors)
         weighted_tensors = [
-            t * (0.5 ** ((v - version) / 2))
-            for t, v in zip(tensors, prev_model_versions)
+            t * weight
+            for (_, t), weight in zip(param_names_and_tensors, normalized_weights)
         ]
 
         # Sanity check sizes.
         assert param_names_and_tensors[0][1].shape == global_param.shape
 
-        new_param = torch.mean(torch.stack(weighted_tensors, 0), 0)
+        # Compute new param as weighted average of updates.
+        new_param = torch.sum(torch.stack(weighted_tensors, 0), 0)
 
         new_global_model.append(
             (
