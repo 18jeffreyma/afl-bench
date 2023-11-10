@@ -25,6 +25,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Always use CUDA if available, otherwise use MPS if available, otherwise use CPU.
+device = "cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
+
 # Run parameters.
 args = get_cmd_line_parser()
 
@@ -34,7 +37,9 @@ if __name__ == "__main__":
         # set the wandb project where this run will be logged
         project="afl-bench",
         entity="afl-bench",
-        name=f"FedAvg CIFAR-10 {args['data_distribution'] + ((' ' + str(args['num_remove'])) if args['num_remove'] is not None else '')}, {args['num_clients']} clients, instant runtime",
+        name=(
+            f"FedAvg CIFAR-10 {args['data_distribution'] + ((' ' + str(args['num_remove'])) if args['num_remove'] is not None else '')},"
+            + f"{args['num_clients']} clients, buffer size {args['buffer_size']} instant runtime",
         # track hyperparameters and run metadata
         config={
             "description": "FedAvg on CIFAR-10",
@@ -50,7 +55,7 @@ if __name__ == "__main__":
             "client_num_steps": args["client_num_steps"],
             "num_aggregations": args["num_aggregations"],
             "batch_size": args["batch_size"],
-            "device": "cuda",
+            "device": device,
         },
     )
 
