@@ -1,4 +1,4 @@
-from typing import Callable, List, Optional
+from typing import Callable, List, Optional, Tuple
 
 from pydantic import BaseModel
 
@@ -24,4 +24,4 @@ class Strategy(BaseModel):
     #   - List of parameters for initial old model of client.
     #   - List of parameters for updated new model of client after local data
     #   - Version number of global model used by client during training.
-    aggregate: Callable[[ModelParams, List[ClientUpdate]], ModelParams]
+    aggregate: Callable[[Tuple[ModelParams, int], List[ClientUpdate]], ModelParams]

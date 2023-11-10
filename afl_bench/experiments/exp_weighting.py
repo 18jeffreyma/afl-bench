@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 args = get_cmd_line_parser()
 
 
-# Define FedAvg strategy.
+# Define Exponential Weighting strategy.
 def aggregation_func(
     global_model_and_version: Tuple[ModelParams, int],
     client_updates: List[ClientUpdate],
@@ -33,6 +33,7 @@ def aggregation_func(
 
     # Get list of client models.
     new_models: List[ModelParams] = tuple(zip(*client_updates))[1]
+    prev_model_versions: List[int] = tuple(zip(*client_updates))[2]
 
     # Get list of length num clients with each element being a tuple of name and parameter.
     new_global_model = []
@@ -45,17 +46,20 @@ def aggregation_func(
         assert param_name == global_param_name
         tensors = [t for _, t in param_names_and_tensors]
 
+        weighted_tensors = [
+            t * (0.5 ** ((v - version) / 2))
+            for t, v in zip(tensors, prev_model_versions)
+        ]
+
         # Sanity check sizes.
         assert param_names_and_tensors[0][1].shape == global_param.shape
+
+        new_param = torch.mean(torch.stack(weighted_tensors, 0), 0)
+
         new_global_model.append(
             (
                 param_name,
-                torch.mean(
-                    torch.stack(tensors, 0),
-                    0,
-                )
-                if "bn" not in param_name
-                else global_param,
+                new_param if "bn" not in param_name else global_param,
             )
         )
 
@@ -69,7 +73,7 @@ def aggregation_func(
 
 # Note that we wait for full buffer and specify buffer size.
 strategy = Strategy(
-    name="FedAvg",
+    name="ExpWeighting",
     wait_for_full=args["wait_for_full"],
     buffer_size=args["buffer_size"],
     ms_to_wait=args["ms_to_wait"],

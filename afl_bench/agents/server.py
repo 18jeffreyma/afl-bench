@@ -119,7 +119,8 @@ class Server(ServerInterface):
 
                 # Aggregate and update model.
                 new_model = self.strategy.aggregate(
-                    self.model.named_parameters(), aggregated_updates
+                    (self.model.named_parameters(), self.version_number),
+                    aggregated_updates,
                 )
 
                 # Acquire model lock and update current global model. Notify any waiting threads.
