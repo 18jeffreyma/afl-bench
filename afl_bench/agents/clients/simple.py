@@ -14,6 +14,7 @@ class Client:
         self.num_steps = num_steps
         self.lr = lr
         self.device = device
+        self.optimizer = torch.optim.Adam(net.parameters(), lr=lr)
 
     def get_parameters(self, config):
         return get_parameters(self.net)
@@ -21,7 +22,12 @@ class Client:
     def fit(self, parameters, config):
         set_parameters(self.net, parameters)
         avg_epoch_loss, avg_epoch_acc = _train(
-            self.net, self.trainloader, self.num_steps, device=self.device, lr=self.lr
+            self.net,
+            self.trainloader,
+            self.optimizer,
+            self.num_steps,
+            device=self.device,
+            lr=self.lr,
         )
         return (
             get_parameters(self.net),
@@ -39,10 +45,12 @@ class Client:
         return float(loss), len(self.valloader), {"accuracy": float(accuracy)}
 
 
-def _train(net, trainloader, num_steps: int, device="cpu", lr=0.001):
+def _train(net, trainloader, optimizer, num_steps: int, device="cpu", lr=0.001):
     """Train the network on the training set."""
+
     criterion = torch.nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(net.parameters(), lr=lr)
+
+    optimizer.zero_grad()
     net.train()
 
     step_count = 0
@@ -69,7 +77,7 @@ def _train(net, trainloader, num_steps: int, device="cpu", lr=0.001):
             # Metrics
             with torch.no_grad():
                 total_count += labels.size(0)
-                correct_count += (torch.max(outputs.data, 1)[1] == labels).sum().item()
+                correct_count += (torch.argmax(outputs.data, 1) == labels).sum().item()
 
             step_count += 1
 
@@ -86,8 +94,8 @@ def _test(net, testloader, device="cpu"):
             images, labels = images.to(device), labels.to(device)
             outputs = net(images)
             loss += criterion(outputs, labels).item()
-            _, predicted = torch.max(outputs.data, 1)
             total += labels.size(0)
+            predicted = torch.argmax(outputs.data, 1)
             correct += (predicted == labels).sum().item()
     loss /= len(testloader.dataset)
     accuracy = correct / total

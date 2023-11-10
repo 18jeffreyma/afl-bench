@@ -51,12 +51,12 @@ def randomly_remove_labels(dataset, labels, num_classes, num_to_remove, num_agen
             random.sample(range(num_classes), num_classes - num_to_remove)
         )
 
-    random.shuffle(labels)
-
     # Of these agents, for each label, evenly distribute to agents who need that label.
     agent_indices = [[] for _ in range(num_agents)]
     for i in range(num_classes):
         label_indices = [j for j, x in enumerate(labels) if x == i]
+
+        random.shuffle(label_indices)
         matched_agents = [j for j in range(num_agents) if i in agent_labels[j]]
 
         chunk_size = len(label_indices) // len(matched_agents)

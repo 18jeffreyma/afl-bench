@@ -15,9 +15,8 @@ def distribute_datasets(
     test_dataset,
     batch_size=32,
     pin_memory=True,
-    device="cuda",
-    num_workers=8,
-):
+    num_workers=4,
+) -> Tuple[DataLoader, DataLoader, DataLoader]:
     # Split each partition into train/val and create DataLoader
     trainloaders = []
     valloaders = []
@@ -32,6 +31,8 @@ def distribute_datasets(
                 batch_size=batch_size,
                 shuffle=True,
                 num_workers=num_workers,
+                pin_memory=pin_memory,
+                persistent_workers=True,
             )
         )
         valloaders.append(
@@ -39,12 +40,16 @@ def distribute_datasets(
                 ds_val,
                 batch_size=batch_size,
                 num_workers=num_workers,
+                pin_memory=pin_memory,
+                persistent_workers=True,
             )
         )
     testloader = DataLoader(
         test_dataset,
         batch_size=batch_size,
         num_workers=num_workers,
+        pin_memory=pin_memory,
+        persistent_workers=True,
     )
     return trainloaders, valloaders, testloader
 

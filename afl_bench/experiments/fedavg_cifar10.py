@@ -15,6 +15,7 @@ from afl_bench.datasets.cifar10 import (
     load_cifar10_sorted_partition,
 )
 from afl_bench.experiments.utils import get_cmd_line_parser
+from afl_bench.models.resnet import ResNet18
 from afl_bench.models.simple_cnn import CIFAR10SimpleCNN
 from afl_bench.types import ClientUpdate, ModelParams
 
@@ -37,7 +38,7 @@ if __name__ == "__main__":
         # track hyperparameters and run metadata
         config={
             "description": "FedAvg on CIFAR-10",
-            "architecture": "SimpleCNN",
+            "architecture": "ResNet18",
             "dataset": "CIFAR10",
             "data_distribution": args["data_distribution"],
             "num_remove": args["num_remove"],
@@ -57,32 +58,41 @@ if __name__ == "__main__":
         """
         Define strategy and aggregation function.
         """
-        # Client updates have the following nesting:
-        #  - client_update[i] = (old_model, new_model, old_model_index) is the i-th update in
-        #    the buffer
-        # We pivot this such that we have a list of old models, new models to diff updates.
-        old_models, new_models, _ = tuple(zip(*client_updates))
 
-        # Return new model that is just the parameter wise average of the previous.
-        per_pair_updates = [
-            [
-                new_param - old_param
-                for old_param, new_param in zip(old_model, new_model)
-            ]
-            for old_model, new_model in zip(old_models, new_models)
-        ]
+        # Get list of client models.
+        new_models: List[ModelParams] = tuple(zip(*client_updates))[1]
 
-        # For each corresponding parameter group we compute the average of the updates
-        updates = [
-            torch.mean(torch.stack(param_group, 0), 0)
-            for param_group in zip(*per_pair_updates)
-        ]
+        # Get list of length num clients with each element being a tuple of name and parameter.
+        new_global_model = []
+        for param_names_and_tensors, (global_param_name, global_param) in zip(
+            zip(*new_models), global_model
+        ):
+            param_name = param_names_and_tensors[0][0]
 
-        # assert [t.shape for t in global_model] == [t.shape for t in new_model]
-        return [
-            global_param.add(update)
-            for global_param, update in zip(global_model, updates)
-        ]
+            # Sanity check names.
+            assert param_name == global_param_name
+            tensors = [t for _, t in param_names_and_tensors]
+
+            # Sanity check sizes.
+            assert param_names_and_tensors[0][1].shape == global_param.shape
+            new_global_model.append(
+                (
+                    param_name,
+                    torch.mean(
+                        torch.stack(tensors, 0),
+                        0,
+                    )
+                    if "bn" not in param_name
+                    else global_param,
+                )
+            )
+
+        # Sanity check sizes.
+        for a, b in zip(global_model, new_global_model):
+            assert a[0] == b[0]
+            assert a[1].shape == b[1].shape
+
+        return new_global_model
 
     # Note that we wait for full buffer and specify buffer size.
     strategy = Strategy(

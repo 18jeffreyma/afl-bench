@@ -118,8 +118,8 @@ class Server(ServerInterface):
                 )
 
                 # Aggregate and update model.
-                model_update = self.strategy.aggregate(
-                    self.model.parameters(), aggregated_updates
+                new_model = self.strategy.aggregate(
+                    self.model.named_parameters(), aggregated_updates
                 )
 
                 # Acquire model lock and update current global model. Notify any waiting threads.
@@ -128,11 +128,12 @@ class Server(ServerInterface):
                         "Server thread updating global model to version %d.",
                         self.version_number + 1,
                     )
-                    set_parameters(self.model, model_update)
+                    set_parameters(self.model, new_model)
 
                     _, accuracy = _test(
                         self.model, self.test_dataloader, device=self.device
                     )
+                    logger.info("Server test set accuracy: %s", accuracy)
                     wandb.log(
                         {
                             "server": {
