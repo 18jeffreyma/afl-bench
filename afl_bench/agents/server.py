@@ -134,26 +134,27 @@ class Server(ServerInterface):
                         self.model, self.test_dataloader, device=self.device
                     )
                     logger.info("Server test set accuracy: %s", accuracy)
+
+                    self.version_number += 1
                     wandb.log(
                         {
                             "server": {
                                 **{
                                     "accuracy": accuracy,
-                                    "version": self.version_number + 1,
+                                    "version": self.version_number,
                                     "num_updates": len(aggregated_updates),
                                 },
-                                "global_version": self.version_number + 1,
+                                "global_version": self.version_number,
                             }
-                        }
+                        },
                     )
 
-                    self.version_number += 1
                     self.model_cv.notify_all()
 
         # Initialize thread once only
         if self.thread is None:
             self.is_running = True
-            self.thread = Thread(target=run_impl)
+            self.thread = Thread(target=run_impl, daemon=True)
             self.thread.start()
         else:
             raise RuntimeError("Server thread already running!")

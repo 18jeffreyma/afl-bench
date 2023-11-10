@@ -52,7 +52,7 @@ class ClientThread:
                             **new_metrics,
                             "global_version": version,
                         }
-                    }
+                    },
                 )
 
                 _, _, metrics = self.client.evaluate(new_parameters, eval_config)
@@ -64,7 +64,7 @@ class ClientThread:
                             **metrics,
                             "global_version": version,
                         }
-                    }
+                    },
                 )
 
                 # Broadcast updated model to server. If server indicates not running, stop.
@@ -79,7 +79,7 @@ class ClientThread:
         # Initialize thread once only
         if self.thread is None:
             self.is_running = True
-            self.thread = Thread(target=run_impl)
+            self.thread = Thread(target=run_impl, daemon=True)
             self.thread.start()
         else:
             raise RuntimeError("Client thread already running!")

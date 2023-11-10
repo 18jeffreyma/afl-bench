@@ -28,7 +28,7 @@ class TestBuffer(unittest.TestCase):
         def set_result(result):
             result[0] = buffer.get_items()
 
-        thread = Thread(target=set_result, args=(result,))
+        thread = Thread(target=set_result, args=(result,), daemon=True)
         thread.start()
 
         # Background thread should be waiting right now for buffer to be full.

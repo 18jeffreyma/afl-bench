@@ -26,4 +26,4 @@ class GaussianRuntime(RuntimeModel):
         self.variance = variance
 
     def sample_runtime(self) -> float:
-        return float(np.random.normal(self.mean, np.sqrt(self.variance)))
+        return max(float(np.random.normal(self.mean, np.sqrt(self.variance))), 0.0)

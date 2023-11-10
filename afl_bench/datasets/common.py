@@ -15,7 +15,7 @@ def distribute_datasets(
     test_dataset,
     batch_size=32,
     pin_memory=True,
-    num_workers=4,
+    num_workers=2,
 ) -> Tuple[DataLoader, DataLoader, DataLoader]:
     # Split each partition into train/val and create DataLoader
     trainloaders = []
@@ -129,7 +129,7 @@ def load_datasets_randomly_remove(
     """
     Return dataloader such that each client has only one class.
     """
-    assert num_clients % num_classes == 0
+    assert num_to_remove < num_classes
 
     datasets = randomly_remove_labels(
         train_set, train_set.targets, num_classes, num_to_remove, num_clients

@@ -1,9 +1,16 @@
 import argparse
 import re
 from functools import partial
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
 
+import torch
+
+import wandb
+from afl_bench.agents.client_thread import ClientThread
+from afl_bench.agents.clients.simple import Client
 from afl_bench.agents.runtime_model import GaussianRuntime, InstantRuntime
+from afl_bench.agents.server import Server
+from afl_bench.agents.strategies import Strategy
 from afl_bench.datasets.cifar10 import (
     load_cifar10_iid,
     load_cifar10_one_class_per_client,
@@ -21,6 +28,13 @@ CLIENT_TYPE_TO_MODEL = {
     "i": InstantRuntime,
     "g": GaussianRuntime,
 }
+
+# Always use CUDA if available, otherwise use MPS if available, otherwise use CPU.
+DEVICE = (
+    "cuda"
+    if torch.cuda.is_available()
+    else ("mps" if torch.backends.mps.is_available() else "cpu")
+)
 
 
 def get_cmd_line_parser() -> Dict[str, Any]:
@@ -143,3 +157,79 @@ def get_cmd_line_parser() -> Dict[str, Any]:
             )
 
     return arguments
+
+
+def run_experiment(
+    strategy: Strategy, args: Dict[str, Any], model_info: Tuple[str, callable]
+):
+    # Start a new wandb run to track this script
+    model_name, model_generator = model_info
+    run = wandb.init(
+        # set the wandb project where this run will be logged
+        project="afl-bench",
+        entity="afl-bench",
+        name=f"{strategy.name} {args['dataset']} {args['data_distribution'] + ((' ' + str(args['num_remove'])) if args['num_remove'] is not None else '')}, client info {args['client_info']}, buffer size {args['buffer_size']}",
+        # track hyperparameters and run metadata
+        config={
+            "architecture": model_name,
+            "dataset": args["dataset"],
+            "data_distribution": args["data_distribution"],
+            "num_remove": args["num_remove"],
+            "wait_for_full": args["wait_for_full"],
+            "buffer_size": args["buffer_size"],
+            "ms_to_wait": args["ms_to_wait"],
+            "num_clients": len(args["client_runtimes"]),
+            "client_runtimes": args["client_runtimes"],
+            "client_lr": args["client_lr"],
+            "client_num_steps": args["client_num_steps"],
+            "num_aggregations": args["num_aggregations"],
+            "batch_size": args["batch_size"],
+            "device": DEVICE,
+        },
+    )
+
+    trainloaders, testloaders, global_testloader = args["load_function"](
+        run.config["num_clients"], batch_size=run.config["batch_size"]
+    )
+
+    #########################################################################################
+    # NOTE: NOTHING BELOW THIS LINE SHOULD BE CHANGED.                                      #
+    #########################################################################################
+
+    # Define a server where global model is a SimpleCNN and strategy is the one defined above.
+    server = Server(
+        model_generator().to(run.config["device"]),
+        strategy,
+        run.config["num_aggregations"],
+        global_testloader,
+        device=run.config["device"],
+    )
+
+    # Create client threads with models. Note runtime is instant
+    # (meaning no simulated training delay).
+    client_threads = []
+    for i, runtime_model in enumerate(args["client_runtimes"]):
+        client = Client(
+            model_generator().to(run.config["device"]),
+            trainloaders[i],
+            testloaders[i],
+            num_steps=run.config["client_num_steps"],
+            lr=run.config["client_lr"],
+            device=run.config["device"],
+        )
+        client_thread = ClientThread(
+            client, server, runtime_model=runtime_model, client_id=i
+        )
+        client_threads.append(client_thread)
+
+    # Start up server and start up all client threads.
+    server.run()
+    for client_thread in client_threads:
+        client_thread.run()
+
+    # Kill client threads once server stops.
+    server.join()
+    for client_thread in client_threads:
+        client_thread.stop()
+
+    wandb.finish()
