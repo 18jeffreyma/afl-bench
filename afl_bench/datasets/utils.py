@@ -41,16 +41,7 @@ def one_class_partition(dataset, labels, num_classes, num_agents):
     return [Subset(dataset, agent_indices[i]) for i in range(num_agents)]
 
 
-def randomly_remove_labels(dataset, labels, num_classes, num_to_remove, num_agents):
-    assert num_to_remove < num_classes
-
-    # Randomly sample which agents will have which labels.
-    agent_labels = []
-    for _ in range(num_agents):
-        agent_labels.append(
-            random.sample(range(num_classes), num_classes - num_to_remove)
-        )
-
+def _agent_labels_to_indices(agent_labels, labels, num_classes, num_agents):
     # Of these agents, for each label, evenly distribute to agents who need that label.
     agent_indices = [[] for _ in range(num_agents)]
     for i in range(num_classes):
@@ -65,5 +56,55 @@ def randomly_remove_labels(dataset, labels, num_classes, num_to_remove, num_agen
             agent_indices[matched_agent].extend(
                 label_indices[j * chunk_size : (j + 1) * chunk_size]
             )
+
+    return agent_indices
+
+
+def randomly_remove_labels(dataset, labels, num_classes, num_to_remove, num_agents):
+    assert num_to_remove < num_classes
+
+    # Randomly sample which agents will have which labels.
+    agent_labels = []
+    for _ in range(num_agents):
+        agent_labels.append(
+            random.sample(range(num_classes), num_classes - num_to_remove)
+        )
+
+    # Of these agents, for each label, evenly distribute to agents who need that label.
+    agent_indices = _agent_labels_to_indices(
+        agent_labels, labels, num_classes, num_agents
+    )
+
+    return [Subset(dataset, agent_indices[i]) for i in range(num_agents)]
+
+
+def restricted_subpopulation(
+    size_subpopulations, labels_subpopulations, dataset, labels, num_classes, num_agents
+):
+    assert sum(size_subpopulations) <= num_agents
+
+    # Test that the number of subpopulation labels is less than the number of classes.
+    total_sub_population_labels = sum(
+        len(label_subpopulation) for label_subpopulation in labels_subpopulations
+    )
+    assert total_sub_population_labels <= num_classes
+
+    # Test that there are no duplicates.
+    unique_subpopulation_labels = set().union(*labels_subpopulations)
+    remaining_labels = set(range(num_classes)) - unique_subpopulation_labels
+    assert len(set().union(*labels_subpopulations)) == total_sub_population_labels
+
+    agent_labels = []
+    for i, size in enumerate(size_subpopulations):
+        for _ in range(size):
+            agent_labels.insert(0, labels_subpopulations[i])
+
+    for _ in range(num_agents - sum(size_subpopulations)):
+        agent_labels.insert(0, remaining_labels)
+
+    # Of these agents, for each label, evenly distribute to agents who need that label.
+    agent_indices = _agent_labels_to_indices(
+        agent_labels, labels, num_classes, num_agents
+    )
 
     return [Subset(dataset, agent_indices[i]) for i in range(num_agents)]

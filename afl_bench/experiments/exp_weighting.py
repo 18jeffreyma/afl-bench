@@ -1,15 +1,21 @@
 import logging
+import random
 from functools import partial
 from typing import List, Tuple
 
+import numpy as np
 import torch
 
-import wandb
-from afl_bench.agents import ClientThread, Server, Strategy
-from afl_bench.agents.clients import Client
+from afl_bench.agents import Strategy
 from afl_bench.experiments.utils import get_cmd_line_parser, run_experiment
 from afl_bench.models.simple_cnn import CIFAR10SimpleCNN
 from afl_bench.types import ClientUpdate, ModelParams
+
+# Set random seed for reproducibility.
+SEED = 42
+random.seed(SEED)
+torch.random.manual_seed(SEED)
+np.random.seed(SEED)
 
 # Set logging level to DEBUG to see more detailed logs.
 logging.basicConfig(
@@ -32,11 +38,10 @@ def aggregation_func(
     global_model, version = global_model_and_version
 
     # Get list of client models.
-    new_models: List[ModelParams] = tuple(zip(*client_updates))[1]
-    prev_model_versions: List[int] = tuple(zip(*client_updates))[2]
+    old_models, new_models, prev_model_versions = tuple(zip(*client_updates))
 
     # Compute weights for each client update, weighting more recent updates more heavily.
-    weights = [(0.5 ** ((version - v) / 2)) for v in prev_model_versions]
+    weights = [(0.5 ** ((version - v))) for v in prev_model_versions]
     total_weights = sum(weights)
     normalized_weights = [w / total_weights for w in weights]
 
@@ -44,24 +49,30 @@ def aggregation_func(
 
     # Get list of length num clients with each element being a tuple of name and parameter.
     new_global_model = []
-    for param_names_and_tensors, (global_param_name, global_param) in zip(
-        zip(*new_models), global_model
-    ):
+    for (
+        param_names_and_tensors,
+        old_param_names_and_tensors,
+        (global_param_name, global_param),
+    ) in zip(zip(*new_models), zip(*old_models), global_model):
         param_name = param_names_and_tensors[0][0]
 
         # Sanity check names.
         assert param_name == global_param_name
         assert len(normalized_weights) == len(param_names_and_tensors)
-        weighted_tensors = [
-            t * weight
-            for (_, t), weight in zip(param_names_and_tensors, normalized_weights)
+        raw_updates = [
+            t - old_t
+            for (_, t), (_, old_t) in zip(
+                param_names_and_tensors, old_param_names_and_tensors
+            )
         ]
+        weighted_updates = [w * t for w, t in zip(normalized_weights, raw_updates)]
 
         # Sanity check sizes.
         assert param_names_and_tensors[0][1].shape == global_param.shape
 
         # Compute new param as weighted average of updates.
-        new_param = torch.sum(torch.stack(weighted_tensors, 0), 0)
+        computed_update = torch.sum(torch.stack(weighted_updates, 0), 0)
+        new_param = global_param + computed_update
 
         new_global_model.append(
             (

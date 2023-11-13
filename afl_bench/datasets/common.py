@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader, random_split
 from afl_bench.datasets.utils import (
     one_class_partition,
     randomly_remove_labels,
+    restricted_subpopulation,
     sort_and_partition,
 )
 
@@ -127,7 +128,7 @@ def load_datasets_randomly_remove(
     pin_memory=True,
 ) -> Tuple[List[DataLoader], List[DataLoader], DataLoader]:
     """
-    Return dataloader such that each client has only one class.
+    Return dataloader such that each client is missing a random subset of classes.
     """
     assert num_to_remove < num_classes
 
@@ -137,4 +138,45 @@ def load_datasets_randomly_remove(
 
     return distribute_datasets(
         datasets, test_set, batch_size=batch_size, pin_memory=pin_memory
+    )
+
+
+def load_datasets_restricted_subpopulation(
+    size_subpopulations: List[int],
+    labels_subpopulations: List[List[int]],
+    train_set: torch.utils.data.Dataset,
+    test_set: torch.utils.data.Dataset,
+    num_classes: int,
+    num_clients: int,
+    batch_size=32,
+    pin_memory=True,
+) -> Tuple[List[DataLoader], List[DataLoader], DataLoader]:
+    """
+    Return dataloader such that last subpopulation clients have exclusive access to a subset of classes.
+    """
+    assert sum(size_subpopulations) <= num_clients
+
+    # Test that the number of subpopulation labels is less than the number of classes.
+    total_sub_population_labels = sum(
+        len(label_subpopulation) for label_subpopulation in labels_subpopulations
+    )
+    assert total_sub_population_labels <= num_classes
+
+    # TEst that there are no duplicates.
+    assert len(set().union(*labels_subpopulations)) == total_sub_population_labels
+
+    datasets = restricted_subpopulation(
+        size_subpopulations,
+        labels_subpopulations,
+        train_set,
+        train_set.targets,
+        num_classes,
+        num_clients,
+    )
+
+    return distribute_datasets(
+        datasets,
+        test_set,
+        batch_size=batch_size,
+        pin_memory=pin_memory,
     )

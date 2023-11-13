@@ -16,6 +16,7 @@ random.seed(SEED)
 torch.random.manual_seed(SEED)
 np.random.seed(SEED)
 
+
 # Set logging level to DEBUG to see more detailed logs.
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -26,7 +27,7 @@ logger = logging.getLogger(__name__)
 args = get_cmd_line_parser()
 
 
-# Define FedAvg strategy.
+# Define Exponential Weighting strategy.
 def aggregation_func(
     global_model_and_version: Tuple[ModelParams, int],
     client_updates: List[ClientUpdate],
@@ -37,40 +38,46 @@ def aggregation_func(
     global_model, version = global_model_and_version
 
     # Get list of client models.
-    old_models, new_models, _ = tuple(zip(*client_updates))
+    old_models, new_models, prev_model_versions = tuple(zip(*client_updates))
+
+    # Compute weights for each client update, weighting more recent updates more heavily.
+    weights = [(2 ** ((version - v))) for v in prev_model_versions]
+    total_weights = sum(weights)
+    normalized_weights = [w / total_weights for w in weights]
+
+    logger.info("Aggregation weights: %s", normalized_weights)
 
     # Get list of length num clients with each element being a tuple of name and parameter.
     new_global_model = []
     for (
-        new_param_names_and_tensors,
+        param_names_and_tensors,
         old_param_names_and_tensors,
         (global_param_name, global_param),
     ) in zip(zip(*new_models), zip(*old_models), global_model):
-        param_name = new_param_names_and_tensors[0][0]
+        param_name = param_names_and_tensors[0][0]
 
         # Sanity check names.
         assert param_name == global_param_name
-
-        # Compute update diffs for each param for each old/new model pair.
-        updates = [
-            new_param - old_param
-            for (_, new_param), (_, old_param) in zip(
-                new_param_names_and_tensors, old_param_names_and_tensors
+        assert len(normalized_weights) == len(param_names_and_tensors)
+        raw_updates = [
+            t - old_t
+            for (_, t), (_, old_t) in zip(
+                param_names_and_tensors, old_param_names_and_tensors
             )
         ]
+        weighted_updates = [w * t for w, t in zip(normalized_weights, raw_updates)]
 
         # Sanity check sizes.
-        assert new_param_names_and_tensors[0][1].shape == global_param.shape
+        assert param_names_and_tensors[0][1].shape == global_param.shape
+
+        # Compute new param as weighted average of updates.
+        computed_update = torch.sum(torch.stack(weighted_updates, 0), 0)
+        new_param = global_param + computed_update
+
         new_global_model.append(
             (
                 param_name,
-                global_param
-                + torch.mean(
-                    torch.stack(updates, 0),
-                    0,
-                )
-                if "bn" not in param_name
-                else global_param,
+                new_param if "bn" not in param_name else global_param,
             )
         )
 
@@ -84,7 +91,7 @@ def aggregation_func(
 
 # Note that we wait for full buffer and specify buffer size.
 strategy = Strategy(
-    name="FedAvg",
+    name="ReverseExpWeighting",
     wait_for_full=args["wait_for_full"],
     buffer_size=args["buffer_size"],
     ms_to_wait=args["ms_to_wait"],

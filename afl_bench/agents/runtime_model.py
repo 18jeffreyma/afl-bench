@@ -27,3 +27,12 @@ class GaussianRuntime(RuntimeModel):
 
     def sample_runtime(self) -> float:
         return max(float(np.random.normal(self.mean, np.sqrt(self.variance))), 0.0)
+
+
+class UniformRuntime(RuntimeModel):
+    def __init__(self, min, max) -> None:
+        self.min = min
+        self.max = max
+
+    def sample_runtime(self) -> float:
+        return float(np.random.uniform(self.min, self.max))

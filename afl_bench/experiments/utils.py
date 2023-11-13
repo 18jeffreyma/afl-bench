@@ -8,25 +8,32 @@ import torch
 import wandb
 from afl_bench.agents.client_thread import ClientThread
 from afl_bench.agents.clients.simple import Client
-from afl_bench.agents.runtime_model import GaussianRuntime, InstantRuntime
+from afl_bench.agents.runtime_model import (
+    GaussianRuntime,
+    InstantRuntime,
+    UniformRuntime,
+)
 from afl_bench.agents.server import Server
 from afl_bench.agents.strategies import Strategy
 from afl_bench.datasets.cifar10 import (
     load_cifar10_iid,
     load_cifar10_one_class_per_client,
     load_cifar10_randomly_remove,
+    load_cifar10_restricted_subpoplulation,
     load_cifar10_sorted_partition,
 )
 from afl_bench.datasets.fashion_mnist import (
     load_fashion_mnist_iid,
     load_fashion_mnist_one_class_per_client,
     load_fashion_mnist_randomly_remove,
+    load_fashion_mnist_restricted_subpoplulation,
     load_fashion_mnist_sorted_partition,
 )
 
 CLIENT_TYPE_TO_MODEL = {
     "i": InstantRuntime,
     "g": GaussianRuntime,
+    "u": UniformRuntime,
 }
 
 # Always use CUDA if available, otherwise use MPS if available, otherwise use CPU.
@@ -59,12 +66,23 @@ def get_cmd_line_parser() -> Dict[str, Any]:
             "sorted_partition",
             "one_class_per_client",
             "randomly_remove",
+            "restricted_subpopulation",
         ],
     )
     parser.add_argument(
         "--num-remove",
-        help="Number of classes to remove given randomly remove",
+        help="For randomly_remove, number of classes to remove given randomly remove",
         type=int,
+    )
+    parser.add_argument(
+        "--subpopulation-size",
+        help="For restricted subpopulation, size of each subpopulation (i.e. 5,10,15)",
+        type=str,
+    )
+    parser.add_argument(
+        "--subpopulation-labels",
+        help="For restricted subpopulation, labels for each subpopulation (i.e. 1,2,3;4,5,6)",
+        type=str,
     )
 
     # Client parameters.
@@ -109,6 +127,20 @@ def get_cmd_line_parser() -> Dict[str, Any]:
 
     arguments = vars(parser.parse_args())
 
+    # Parse subpopulation parameters.
+    if arguments["data_distribution"] == "restricted_subpopulation":
+        arguments["size_subpopulations"] = tuple(
+            int(x) for x in arguments["subpopulation_size"].split(",")
+        )
+
+        arguments["labels_subpopulations"] = tuple(
+            tuple(int(y) for y in x.split(","))
+            for x in arguments["subpopulation_labels"].split(";")
+        )
+        assert len(arguments["size_subpopulations"]) == len(
+            arguments["labels_subpopulations"]
+        )
+
     # Choose dataset distribution load based on run config.
     load_functions = {
         "cifar10": {
@@ -118,6 +150,11 @@ def get_cmd_line_parser() -> Dict[str, Any]:
             "randomly_remove": partial(
                 load_cifar10_randomly_remove, arguments["num_remove"]
             ),
+            "restricted_subpopulation": partial(
+                load_cifar10_restricted_subpoplulation,
+                arguments["size_subpopulations"],
+                arguments["labels_subpopulations"],
+            ),
         },
         "fashion_mnist": {
             "iid": load_fashion_mnist_iid,
@@ -125,6 +162,11 @@ def get_cmd_line_parser() -> Dict[str, Any]:
             "sorted_partition": load_fashion_mnist_sorted_partition,
             "randomly_remove": partial(
                 load_fashion_mnist_randomly_remove, arguments["num_remove"]
+            ),
+            "restricted_subpopulation": partial(
+                load_fashion_mnist_restricted_subpoplulation,
+                arguments["size_subpopulations"],
+                arguments["labels_subpopulations"],
             ),
         },
     }
@@ -175,6 +217,8 @@ def run_experiment(
             "dataset": args["dataset"],
             "data_distribution": args["data_distribution"],
             "num_remove": args["num_remove"],
+            "subpopulation_size": args["subpopulation_size"],
+            "subpopulation_labels": args["subpopulation_labels"],
             "wait_for_full": args["wait_for_full"],
             "buffer_size": args["buffer_size"],
             "ms_to_wait": args["ms_to_wait"],
