@@ -1,4 +1,6 @@
+import copy
 import logging
+import time
 from abc import abstractmethod
 from itertools import count
 from threading import Condition, Lock, Thread
@@ -50,6 +52,7 @@ class Server(ServerInterface):
         device="cuda",
     ):
         self.model = initial_model
+
         self.version_number = 0
 
         self.strategy = strategy
@@ -63,9 +66,11 @@ class Server(ServerInterface):
 
         self.model_mutex = Lock()
         self.model_cv = Condition(self.model_mutex)
+        self.accuracy_cv = Condition()
 
         self.is_running = False
         self.thread = None
+        self.acc_thread = None
 
         self.test_dataloader = test_dataloader
         self.device = device
@@ -98,9 +103,50 @@ class Server(ServerInterface):
         Start the server thread.
         """
 
+        def run_acc_impl():
+            # Note that we seperate accuracy check as it impacts aggregation loop runtime.
+            previous_version = None
+
+            # Create a copy of the model to test on.
+            with self.model_mutex:
+                temp_model = copy.deepcopy(self.model)
+
+            while True:
+                if not self.is_running or self.version_number >= self.num_aggregations:
+                    break
+
+                # Wait until signaled to test.
+                with self.accuracy_cv:
+                    # If we've already tested this version, wait until the model has been updated.
+                    while previous_version == self.version_number and (
+                        self.is_running and self.version_number < self.num_aggregations
+                    ):
+                        self.accuracy_cv.wait()
+
+                # Copy over the current global model to the temp model.
+                with self.model_mutex:
+                    set_parameters(temp_model, self.model.named_parameters())
+
+                _, accuracy = _test(
+                    temp_model, self.test_dataloader, device=self.device
+                )
+                logger.info("Server test set accuracy: %s", accuracy)
+                wandb.log(
+                    {
+                        "server": {
+                            **{
+                                "accuracy": accuracy,
+                                "version": self.version_number,
+                            },
+                            "global_version": self.version_number,
+                        }
+                    },
+                )
+                previous_version = self.version_number
+
         def run_impl():
-            for i in count():
-                if not self.is_running or i >= self.num_aggregations:
+            for _ in count():
+                if not self.is_running or self.version_number >= self.num_aggregations:
                     logger.info("Aggregation loop terminating...")
                     break
 
@@ -118,45 +164,36 @@ class Server(ServerInterface):
                 )
 
                 # Aggregate and update model.
+                start_time = time.process_time()
+
                 new_model = self.strategy.aggregate(
                     (self.model.named_parameters(), self.version_number),
                     aggregated_updates,
                 )
 
+                logger.info(
+                    "Aggregation loop took %f seconds.",
+                    time.process_time() - start_time,
+                )
+
                 # Acquire model lock and update current global model. Notify any waiting threads.
                 with self.model_mutex:
-                    logger.info(
-                        "Server thread updating global model to version %d.",
-                        self.version_number + 1,
-                    )
                     set_parameters(self.model, new_model)
-
-                    _, accuracy = _test(
-                        self.model, self.test_dataloader, device=self.device
-                    )
-                    logger.info("Server test set accuracy: %s", accuracy)
-
                     self.version_number += 1
-                    wandb.log(
-                        {
-                            "server": {
-                                **{
-                                    "accuracy": accuracy,
-                                    "version": self.version_number,
-                                    "num_updates": len(aggregated_updates),
-                                },
-                                "global_version": self.version_number,
-                            }
-                        },
-                    )
-
                     self.model_cv.notify_all()
+
+                # Notify the accuracy thread to test the new model.
+                with self.accuracy_cv:
+                    self.accuracy_cv.notify_all()
 
         # Initialize thread once only
         if self.thread is None:
             self.is_running = True
             self.thread = Thread(target=run_impl, daemon=True)
+            self.acc_thread = Thread(target=run_acc_impl, daemon=True)
+
             self.thread.start()
+            self.acc_thread.start()
         else:
             raise RuntimeError("Server thread already running!")
 
@@ -164,10 +201,13 @@ class Server(ServerInterface):
         """
         Stop the server thread.
         """
-        if self.thread is not None:
+        if self.thread is not None or self.acc_thread is not None:
             self.is_running = False
             self.thread.join()
             self.thread = None
+
+            self.acc_thread.join()
+            self.acc_thread = None
 
     def join(self):
         """
@@ -176,3 +216,10 @@ class Server(ServerInterface):
         if self.thread is not None:
             self.thread.join()
             self.thread = None
+
+            # Notify the accuracy thread in case it is waiting.
+            with self.accuracy_cv:
+                self.accuracy_cv.notify_all()
+            self.acc_thread.join()
+
+            self.acc_thread = None

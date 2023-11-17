@@ -1,6 +1,10 @@
 import logging
+import random
 import time
 from threading import Thread
+
+import numpy as np
+import torch
 
 import wandb
 from afl_bench.agents.clients import Client
@@ -17,6 +21,7 @@ class ClientThread:
         server: ServerInterface,
         runtime_model: RuntimeModel,
         client_id: int,
+        start_seed=42,
     ) -> None:
         self.client = client
         self.server = server
@@ -24,10 +29,16 @@ class ClientThread:
         self.runtime_model = runtime_model
         self.thread = None
         self.is_running = False
+        self.start_seed = start_seed
 
     def run(self, train_config={}, eval_config={}):
         def run_impl():
             prev_version = None
+
+            # Set seed based on client id (otherwise all threads will have same seed).
+            random.seed(self.start_seed + self.client_id)
+            torch.random.manual_seed(self.start_seed + self.client_id)
+            np.random.seed(self.start_seed + self.client_id)
 
             while self.is_running:
                 # Get latest global model and simulate client runtime.
