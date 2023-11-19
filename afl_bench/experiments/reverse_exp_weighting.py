@@ -7,7 +7,6 @@ import torch
 
 from afl_bench.agents import Strategy
 from afl_bench.experiments.utils import get_cmd_line_parser, run_experiment
-from afl_bench.models.simple_cnn import CIFAR10SimpleCNN
 from afl_bench.types import ClientUpdate, ModelParams
 
 # Set random seed for reproducibility.
@@ -38,10 +37,11 @@ def aggregation_func(
     global_model, version = global_model_and_version
 
     # Get list of client models.
-    old_models, new_models, prev_model_versions = tuple(zip(*client_updates))
+    _, old_models, new_models, prev_model_versions = tuple(zip(*client_updates))
 
     # Compute weights for each client update, weighting more recent updates more heavily.
-    weights = [(2 ** ((version - v))) for v in prev_model_versions]
+    assert args["exp_weighting"] > 1.0
+    weights = [(args["exp_weighting"] ** ((version - v))) for v in prev_model_versions]
     total_weights = sum(weights)
     normalized_weights = [w / total_weights for w in weights]
 
@@ -100,6 +100,4 @@ strategy = Strategy(
 
 
 if __name__ == "__main__":
-    run_experiment(
-        strategy=strategy, args=args, model_info=("SimpleCNN", CIFAR10SimpleCNN)
-    )
+    run_experiment(strategy=strategy, args=args, model_info=args["model_info"])

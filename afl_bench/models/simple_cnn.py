@@ -55,18 +55,39 @@ class CIFAR10SimpleCNN(nn.Module):
 class FashionMNISTSimpleCNN(nn.Module):
     def __init__(self) -> None:
         super(FashionMNISTSimpleCNN, self).__init__()
-        self.conv1 = nn.Conv2d(1, 6, 5)
+        self.conv1 = nn.Conv2d(1, 32, 3, padding="same")
+        self.conv2 = nn.Conv2d(32, 32, 3, padding="same")
+        self.gn1 = nn.GroupNorm(8, 32)
+        self.gn2 = nn.GroupNorm(8, 32)
+        self.dropout1 = nn.Dropout2d(0.3)
+
         self.pool = nn.MaxPool2d(2, 2)
-        self.conv2 = nn.Conv2d(6, 16, 5)
-        self.fc1 = nn.Linear(16 * 5 * 5, 120)
-        self.fc2 = nn.Linear(120, 84)
-        self.fc3 = nn.Linear(84, 10)
+
+        self.conv3 = nn.Conv2d(32, 64, 3, padding="same")
+        self.conv4 = nn.Conv2d(64, 64, 3, padding="same")
+        self.gn3 = nn.GroupNorm(16, 64)
+        self.gn4 = nn.GroupNorm(16, 64)
+        self.dropout2 = nn.Dropout2d(0.5)
+
+        self.fc1 = nn.Linear(64 * 7 * 7, 128)
+        self.gn5 = nn.GroupNorm(32, 128)
+        self.dropout4 = nn.Dropout2d(0.5)
+        self.fc2 = nn.Linear(128, 10)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.pool(F.relu(self.conv1(x)))
-        x = self.pool(F.relu(self.conv2(x)))
-        x = x.view(-1, 16 * 5 * 5)
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = self.fc3(x)
+        # 28x28
+        x = self.gn1(F.relu(self.conv1(x)))
+        x = self.gn2(F.relu(self.conv2(x)))
+
+        x = self.dropout1(self.pool(x))
+
+        # 14x14
+        x = self.gn3(F.relu(self.conv3(x)))
+        x = self.gn4(F.relu(self.conv4(x)))
+        x = self.dropout2(self.pool(x))
+
+        # 7x7
+        x = flatten(x, start_dim=1)
+        x = self.gn5(F.relu(self.fc1(x)))
+        x = self.fc2(self.dropout4(x))
         return x

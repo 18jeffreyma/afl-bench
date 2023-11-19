@@ -29,6 +29,7 @@ from afl_bench.datasets.fashion_mnist import (
     load_fashion_mnist_restricted_subpoplulation,
     load_fashion_mnist_sorted_partition,
 )
+from afl_bench.models.simple_cnn import CIFAR10SimpleCNN, FashionMNISTSimpleCNN
 
 CLIENT_TYPE_TO_MODEL = {
     "i": InstantRuntime,
@@ -43,10 +44,22 @@ DEVICE = (
     else ("mps" if torch.backends.mps.is_available() else "cpu")
 )
 
+DATASET_TO_MODEL = {
+    "cifar10": ("CIFAR10SimpleCNN", lambda: CIFAR10SimpleCNN()),
+    "fashion_mnist": ("FashionMNISTSimpleCNN", lambda: FashionMNISTSimpleCNN()),
+}
+
 
 def get_cmd_line_parser() -> Dict[str, Any]:
     # Run parameters.
     parser = argparse.ArgumentParser(description="Run FedAvg on CIFAR-10")
+
+    # Strategy parameters.
+    parser.add_argument(
+        "--exp-weighting",
+        help="Expontential weighting",
+        type=float,
+    )
 
     # Dataset parameters.
     parser.add_argument(
@@ -198,6 +211,9 @@ def get_cmd_line_parser() -> Dict[str, Any]:
                 client_runtime_constructor(*client_params)
             )
 
+    # For specified dataset, get model name and model generator.
+    arguments["model_info"] = DATASET_TO_MODEL[arguments["dataset"]]
+
     return arguments
 
 
@@ -228,6 +244,7 @@ def run_experiment(
             "client_num_steps": args["client_num_steps"],
             "num_aggregations": args["num_aggregations"],
             "batch_size": args["batch_size"],
+            "exp_weighting": args["exp_weighting"],
             "device": DEVICE,
         },
     )

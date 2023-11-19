@@ -28,7 +28,11 @@ class ServerInterface:
 
     @abstractmethod
     def broadcast_updated_model(
-        self, old_params: ModelParams, new_params: ModelParams, version_number: int
+        self,
+        client_id: int,
+        old_params: ModelParams,
+        new_params: ModelParams,
+        version_number: int,
     ):
         """
         Upon completion of local training, the client calls this method to
@@ -36,6 +40,7 @@ class ServerInterface:
         since the client may have trained on an outdated model.
 
         Args:
+            client_id: the client id that trained the model.
             old_params: model parameters prior to local training (i.e. the old global model)
             new_params: model parameters after training (i.e. the new global model)
             version_number: the version number of the old global model used.
@@ -89,13 +94,17 @@ class Server(ServerInterface):
             return get_parameters(self.model), self.version_number
 
     def broadcast_updated_model(
-        self, old_params: ModelParams, new_params: ModelParams, version_number: int
+        self,
+        client_id: int,
+        old_params: ModelParams,
+        new_params: ModelParams,
+        version_number: int,
     ):
         logger.info(
             "Received an update from a client from global model version %d.",
             version_number,
         )
-        self.buffer.add((old_params, new_params, version_number))
+        self.buffer.add((client_id, old_params, new_params, version_number))
         return self.thread is not None
 
     def run(self):
@@ -124,8 +133,10 @@ class Server(ServerInterface):
                         self.accuracy_cv.wait()
 
                 # Copy over the current global model to the temp model.
+                version = None
                 with self.model_mutex:
                     set_parameters(temp_model, self.model.named_parameters())
+                    version = self.version_number
 
                 _, accuracy = _test(
                     temp_model, self.test_dataloader, device=self.device
@@ -136,13 +147,13 @@ class Server(ServerInterface):
                         "server": {
                             **{
                                 "accuracy": accuracy,
-                                "version": self.version_number,
+                                "version": version,
                             },
-                            "global_version": self.version_number,
+                            "global_version": version,
                         }
                     },
                 )
-                previous_version = self.version_number
+                previous_version = version
 
         def run_impl():
             for _ in count():

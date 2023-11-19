@@ -14,7 +14,7 @@ class Client:
         self.num_steps = num_steps
         self.lr = lr
         self.device = device
-        self.optimizer = torch.optim.Adam(net.parameters(), lr=lr)
+        self.optimizer = torch.optim.SGD(net.parameters(), lr=lr)
 
     def get_parameters(self, config):
         return get_parameters(self.net)

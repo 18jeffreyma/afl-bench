@@ -67,11 +67,11 @@ class ClientThread:
                 )
 
                 _, _, metrics = self.client.evaluate(new_parameters, eval_config)
-                logger.info("Client thread: %s", metrics)
+                logger.info("Client thread %d metrics: %s", self.client_id, metrics)
 
                 wandb.log(
                     {
-                        f"client/{self.client_id}": {
+                        f"client.{self.client_id}": {
                             **metrics,
                             "global_version": version,
                         }
@@ -80,7 +80,7 @@ class ClientThread:
 
                 # Broadcast updated model to server. If server indicates not running, stop.
                 server_running = self.server.broadcast_updated_model(
-                    init_global_params, new_parameters, version
+                    self.client_id, init_global_params, new_parameters, version
                 )
                 prev_version = version
 

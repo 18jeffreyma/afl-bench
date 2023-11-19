@@ -7,7 +7,6 @@ import torch
 
 from afl_bench.agents import Strategy
 from afl_bench.experiments.utils import get_cmd_line_parser, run_experiment
-from afl_bench.models.simple_cnn import CIFAR10SimpleCNN
 from afl_bench.types import ClientUpdate, ModelParams
 
 # Set random seed for reproducibility.
@@ -37,7 +36,7 @@ def aggregation_func(
     global_model, version = global_model_and_version
 
     # Get list of client models.
-    old_models, new_models, _ = tuple(zip(*client_updates))
+    _, old_models, new_models, _ = tuple(zip(*client_updates))
 
     # Get list of length num clients with each element being a tuple of name and parameter.
     new_global_model = []
@@ -93,6 +92,4 @@ strategy = Strategy(
 
 
 if __name__ == "__main__":
-    run_experiment(
-        strategy=strategy, args=args, model_info=("SimpleCNN", CIFAR10SimpleCNN)
-    )
+    run_experiment(strategy=strategy, args=args, model_info=args["model_info"])

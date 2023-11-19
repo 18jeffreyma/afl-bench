@@ -1,15 +1,13 @@
 import logging
 import random
-from functools import partial
+from collections import defaultdict
 from typing import List, Tuple
 
 import numpy as np
 import torch
 
-import wandb
 from afl_bench.agents import Strategy
 from afl_bench.experiments.utils import get_cmd_line_parser, run_experiment
-from afl_bench.models.simple_cnn import CIFAR10SimpleCNN
 from afl_bench.types import ClientUpdate, ModelParams
 
 # Set random seed for reproducibility.
@@ -30,6 +28,26 @@ num_clients = len(args["client_runtimes"])
 buffer_size = args["buffer_size"]
 
 
+class StalenessTracker:
+    def __init__(self, window_size=5) -> None:
+        self.window_size = window_size
+        self.client_update = defaultdict(list)
+
+    def track_update(self, client_id: int, staleness: int):
+        # Pop oldest update if window size is reached.
+        if len(self.client_update[client_id]) >= self.window_size:
+            self.client_update[client_id].pop()
+        self.client_update[client_id].append(staleness)
+
+    def get_avg_staleness(self, client_id: int):
+        if len(self.client_update[client_id]) == 0:
+            return 0.0
+        return sum(self.client_update[client_id]) / len(self.client_update[client_id])
+
+
+staleness_tracker = StalenessTracker()
+
+
 # Define Exponential Weighting strategy.
 def aggregation_func(
     global_model_and_version: Tuple[ModelParams, int],
@@ -41,16 +59,23 @@ def aggregation_func(
     global_model, version = global_model_and_version
 
     # Get list of client models.
-    old_models, new_models, prev_model_versions = tuple(zip(*client_updates))
+    client_ids, old_models, new_models, prev_model_versions = tuple(
+        zip(*client_updates)
+    )
 
     # Compute weights for each client update, weighting more recent updates more heavily.
-    logger.info("version: %s", version)
-    logger.info("staleness: %s", version - np.array(prev_model_versions))
-    wandb.log({"average_staleness": np.mean(version - np.array(prev_model_versions))})
-    weights = [
-        (1 + (version - v) * buffer_size) / num_clients * 0.1
-        for v in prev_model_versions
+    for client_id, v in zip(client_ids, prev_model_versions):
+        staleness_tracker.track_update(client_id, version - v)
+
+    stalenesses = [
+        staleness_tracker.get_avg_staleness(client_id) for client_id in client_ids
     ]
+
+    weights = [s * buffer_size / num_clients for s in stalenesses]
+    weight_total = sum(weights)
+    weights = [weight / weight_total if weight_total > 0 else 0 for weight in weights]
+
+    logger.info("Aggregation clients: %s", client_ids)
     logger.info("Aggregation weights: %s", weights)
 
     # Get list of length num clients with each element being a tuple of name and parameter.
@@ -99,7 +124,7 @@ def aggregation_func(
 
 # Note that we wait for full buffer and specify buffer size.
 strategy = Strategy(
-    name="FedFair",
+    name="ExpectedStaleness",
     wait_for_full=args["wait_for_full"],
     buffer_size=args["buffer_size"],
     ms_to_wait=args["ms_to_wait"],
@@ -108,6 +133,4 @@ strategy = Strategy(
 
 
 if __name__ == "__main__":
-    run_experiment(
-        strategy=strategy, args=args, model_info=("SimpleCNN", CIFAR10SimpleCNN)
-    )
+    run_experiment(strategy=strategy, args=args, model_info=args["model_info"])
